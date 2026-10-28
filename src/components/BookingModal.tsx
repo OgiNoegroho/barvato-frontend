@@ -1,0 +1,630 @@
+import React, { useState, useEffect, useMemo } from "react"
+import {
+  servicesApi,
+  staffApi,
+  customersApi,
+  queueApi,
+  appointmentApi,
+  shopApi,
+  ApiError,
+  type ServiceItem,
+  type StaffItem,
+  type CustomerItem,
+  type StaffAvailabilityItem,
+} from "../lib/api"
+import { formatRupiah, getIsoWithTimezone } from "../lib/format"
+import { Icon } from "./ui/Icon"
+
+interface BookingModalProps {
+  kind: "appointment" | "walkin"
+  initialDate?: string
+  initialStaffId?: number
+  excludeAppointmentId?: number
+  timezone?: string
+  onClose: () => void
+  onSuccess: (message: string) => void
+}
+
+export function BookingModal({
+  kind,
+  initialDate,
+  initialStaffId,
+  excludeAppointmentId,
+  timezone = "Asia/Jakarta",
+  onClose,
+  onSuccess,
+}: BookingModalProps) {
+  const isWalkin = kind === "walkin"
+
+  // Catalog state
+  const [services, setServices] = useState<ServiceItem[]>([])
+  const [staff, setStaff] = useState<StaffItem[]>([])
+  const [customers, setCustomers] = useState<CustomerItem[]>([])
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true)
+
+  // Shop timezone state
+  const [shopTimezone, setShopTimezone] = useState(timezone)
+
+  // Form state
+  const [customerName, setCustomerName] = useState("")
+  const [customerPhone, setCustomerPhone] = useState("")
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
+  const [selectedServiceId, setSelectedServiceId] = useState<number | "">("")
+  const [selectedStaffId, setSelectedStaffId] = useState<number | "">(initialStaffId ?? "")
+
+  // Date & Time state (for appointments)
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
+  const [appointmentDate, setAppointmentDate] = useState(initialDate || todayStr)
+  const [appointmentTime, setAppointmentTime] = useState("10:00")
+
+  // Availability state
+  const [availabilityList, setAvailabilityList] = useState<StaffAvailabilityItem[]>([])
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null)
+
+  // Submission & Conflict state
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [conflictPrompt, setConflictPrompt] = useState<string | null>(null)
+
+  // Fetch shop timezone on mount
+  useEffect(() => {
+    shopApi
+      .get()
+      .then((res) => {
+        if (res?.shop?.timezone) {
+          setShopTimezone(res.shop.timezone)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load catalog data
+  useEffect(() => {
+    let mounted = true
+    async function loadCatalog() {
+      setIsLoadingCatalog(true)
+      try {
+        const [servicesRes, staffRes, customersRes] = await Promise.all([
+          servicesApi.list(true).catch(() => ({ services: [] })),
+          staffApi.list(false).catch(() => ({ staff: [] })),
+          customersApi.list("").catch(() => ({ customers: [] })),
+        ])
+
+        if (!mounted) return
+        const activeServices = servicesRes.services || []
+        const staffList = staffRes.staff || []
+        setServices(activeServices)
+        setStaff(staffList)
+        setCustomers(customersRes.customers || [])
+
+        if (activeServices.length > 0) {
+          setSelectedServiceId(activeServices[0].id)
+        }
+        if (initialStaffId) {
+          setSelectedStaffId(initialStaffId)
+        }
+      } finally {
+        if (mounted) setIsLoadingCatalog(false)
+      }
+    }
+
+    loadCatalog()
+    return () => {
+      mounted = false
+    }
+  }, [initialStaffId])
+
+  // Recalculate dynamic barber availability whenever relevant form inputs change
+  useEffect(() => {
+    if (services.length === 0) return
+
+    const controller = new AbortController()
+
+    async function checkAvailability() {
+      setIsLoadingAvailability(true)
+      setAvailabilityError(null)
+
+      try {
+        let startsAt = ""
+        if (isWalkin) {
+          startsAt = new Date().toISOString()
+        } else {
+          startsAt = getIsoWithTimezone(appointmentDate, appointmentTime, shopTimezone)
+        }
+
+        const selectedService = services.find((s) => s.id === Number(selectedServiceId))
+        const duration = selectedService?.duration_min || 30
+
+        const res = await staffApi.getAvailability(
+          {
+            starts_at: startsAt,
+            duration_min: duration,
+            exclude_appointment_id: excludeAppointmentId,
+            kind: isWalkin ? "walkin" : "appointment",
+          },
+          controller.signal
+        )
+
+        setAvailabilityList(res.availability || [])
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return
+        }
+        setAvailabilityError("Failed to check barber availability for the selected time.")
+      } finally {
+        setIsLoadingAvailability(false)
+      }
+    }
+
+    checkAvailability()
+
+    return () => {
+      controller.abort()
+    }
+  }, [
+    isWalkin,
+    appointmentDate,
+    appointmentTime,
+    selectedServiceId,
+    shopTimezone,
+    excludeAppointmentId,
+    services,
+  ])
+
+  // Lookup the currently selected barber's availability status
+  const selectedStaffAvailability = useMemo(() => {
+    if (!selectedStaffId) return null
+    return availabilityList.find((a) => a.staff_id === Number(selectedStaffId)) || null
+  }, [selectedStaffId, availabilityList])
+
+  // Formatted validation message when selected barber is busy or unavailable
+  const staffValidationMessage = useMemo(() => {
+    if (!selectedStaffAvailability) return null
+    if (selectedStaffAvailability.available) return null
+
+    if (selectedStaffAvailability.conflict_type === "appointment") {
+      const start = selectedStaffAvailability.conflict_start || ""
+      const end = selectedStaffAvailability.conflict_end || ""
+      return `${selectedStaffAvailability.name} already has an appointment from ${start} to ${end}. Choose another barber or change the time.`
+    }
+    if (selectedStaffAvailability.conflict_type === "walkin") {
+      return `${selectedStaffAvailability.name} is currently serving another customer. Choose another barber or change the time.`
+    }
+    if (selectedStaffAvailability.status === "outside_working_hours") {
+      return `This barber is unavailable at the selected time (outside working hours). Choose another barber or change the appointment time.`
+    }
+    if (selectedStaffAvailability.status === "unavailable") {
+      return `This barber is unavailable at the selected time (${selectedStaffAvailability.reason || "day off"}). Choose another barber or change the appointment time.`
+    }
+    return `This barber is unavailable at the selected time. Choose another barber or change the appointment time.`
+  }, [selectedStaffAvailability])
+
+  const handleSelectCustomer = (c: CustomerItem) => {
+    setSelectedCustomerId(c.id)
+    setCustomerName(c.name)
+    setCustomerPhone(c.phone || "")
+  }
+
+  const isPastDate = useMemo(() => {
+    if (isWalkin) return false
+    return appointmentDate < todayStr
+  }, [isWalkin, appointmentDate, todayStr])
+
+  const isSubmitDisabled =
+    isSubmitting ||
+    isLoadingCatalog ||
+    !customerName.trim() ||
+    !selectedServiceId ||
+    (!isWalkin && !selectedStaffId) ||
+    Boolean(
+      selectedStaffAvailability &&
+        !selectedStaffAvailability.available &&
+        selectedStaffId !== initialStaffId
+    )
+
+  const handleSubmit = async (e: React.FormEvent, override = false) => {
+    e.preventDefault()
+    if (isSubmitting) return
+
+    const trimmedName = customerName.trim()
+    const trimmedPhone = customerPhone.trim()
+
+    if (!trimmedName) {
+      setErrorMessage("Customer name is required.")
+      return
+    }
+
+    if (!selectedServiceId) {
+      setErrorMessage("Please select a service.")
+      return
+    }
+
+    if (!isWalkin && !selectedStaffId) {
+      setErrorMessage("Please select an assigned barber for this appointment.")
+      return
+    }
+
+    if (
+      !override &&
+      selectedStaffAvailability &&
+      !selectedStaffAvailability.available &&
+      selectedStaffId !== initialStaffId
+    ) {
+      setErrorMessage(staffValidationMessage || "The selected barber is not available at this time.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setErrorMessage(null)
+    setConflictPrompt(null)
+
+    try {
+      // 1. Resolve or create customer if needed
+      let customerId = selectedCustomerId
+      if (!customerId) {
+        const existing = customers.find(
+          (c) =>
+            c.name.toLowerCase() === trimmedName.toLowerCase() ||
+            (trimmedPhone && c.phone === trimmedPhone)
+        )
+        if (existing) {
+          customerId = existing.id
+        } else {
+          try {
+            const newCust = await customersApi.create({
+              name: trimmedName,
+              phone: trimmedPhone || undefined,
+            })
+            customerId = newCust.customer.id
+          } catch {
+            if (!isWalkin) {
+              throw new Error("Failed to register customer record. Please check phone format.")
+            }
+          }
+        }
+      }
+
+      // 2. Submit Walk-in or Appointment
+      if (isWalkin) {
+        await queueApi.create({
+          customer_name: trimmedName,
+          customer_id: customerId,
+          service_id: Number(selectedServiceId),
+          assigned_staff_id: selectedStaffId ? Number(selectedStaffId) : null,
+        })
+        onSuccess(`${trimmedName} added to walk-in queue`)
+        onClose()
+      } else {
+        const startsAt = getIsoWithTimezone(appointmentDate, appointmentTime, shopTimezone)
+
+        if (!customerId) {
+          throw new Error("A customer record is required to schedule an appointment.")
+        }
+
+        await appointmentApi.create({
+          customer_id: customerId,
+          staff_id: Number(selectedStaffId),
+          service_id: Number(selectedServiceId),
+          starts_at: startsAt,
+          override,
+        })
+        onSuccess(`Appointment booked for ${trimmedName} at ${appointmentTime}`)
+        onClose()
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.isConflict) {
+          if (err.code === "schedule_conflict") {
+            setConflictPrompt(
+              "Schedule warning: The barber is currently in service with another customer. Would you like to override and book anyway?"
+            )
+            return
+          }
+          if (err.code === "appointment_overlap") {
+            setErrorMessage(
+              "Conflict: The selected barber is already booked for another appointment during this time window."
+            )
+            return
+          }
+          if (err.code === "barber_busy") {
+            setErrorMessage(
+              err.message || "Conflict: The selected barber is already busy and cannot take another service."
+            )
+            return
+          }
+        }
+        setErrorMessage(err.message || "Operation failed.")
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.")
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Barbers to display in dropdown (using dynamic availability if loaded, falling back to staff list)
+  const displayedBarbers = availabilityList.length > 0 ? availabilityList : staff
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="modal"
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
+        <div className="modal-head">
+          <div>
+            <span className="section-index">{isWalkin ? "WALK-IN QUEUE" : "APPOINTMENT BOOKING"}</span>
+            <h2 id="modal-title">{isWalkin ? "Add Customer to Queue" : "Book New Appointment"}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close modal">
+            ×
+          </button>
+        </div>
+
+        {isPastDate && (
+          <div
+            style={{
+              background: "#f7f7f5",
+              border: "1px solid #e2e0d8",
+              padding: "8px 12px",
+              borderRadius: "4px",
+              marginBottom: "16px",
+              fontSize: "11px",
+              color: "#555",
+            }}
+          >
+            ℹ️ <strong>Historical date selected:</strong> This appointment is scheduled for a past date (
+            {appointmentDate}). Existing overlap and barber availability checks will still apply.
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="login-error-alert" role="alert" style={{ marginBottom: "16px" }}>
+            <Icon name="bell" size={16} />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {conflictPrompt && (
+          <div
+            style={{
+              background: "#fef8ee",
+              border: "1px solid #f3d49e",
+              padding: "14px",
+              borderRadius: "4px",
+              marginBottom: "16px",
+            }}
+          >
+            <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--amber)", lineHeight: 1.4 }}>
+              <strong>Overlap Detected:</strong> {conflictPrompt}
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="filter-button"
+                onClick={() => setConflictPrompt(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={(e) => handleSubmit(e, true)}
+                disabled={isSubmitting}
+              >
+                Override &amp; Book
+              </button>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={(e) => handleSubmit(e, false)}>
+          <div className="form-grid">
+            <label className="full">
+              Customer Name
+              <input
+                autoFocus
+                placeholder="Enter full name (e.g. Budi Santoso)"
+                value={customerName}
+                onChange={(e) => {
+                  setCustomerName(e.target.value)
+                  setSelectedCustomerId(null)
+                }}
+                required
+              />
+            </label>
+
+            {/* Quick customer matches */}
+            {customerName.length >= 2 && !selectedCustomerId && (
+              <div
+                className="full"
+                style={{
+                  maxHeight: "100px",
+                  overflowY: "auto",
+                  border: "1px solid var(--line)",
+                  background: "var(--paper-2)",
+                  padding: "4px 8px",
+                  borderRadius: "3px",
+                  marginTop: "-8px",
+                  marginBottom: "8px",
+                }}
+              >
+                <small style={{ display: "block", color: "var(--muted)", marginBottom: "4px" }}>
+                  Existing Clients (Click to auto-fill):
+                </small>
+                {customers
+                  .filter((c) => c.name.toLowerCase().includes(customerName.toLowerCase()))
+                  .slice(0, 3)
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleSelectCustomer(c)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "4px 6px",
+                        background: "none",
+                        border: "none",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <strong>{c.name}</strong> {c.phone ? `(${c.phone})` : ""}
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            <label className="full">
+              Mobile Number
+              <input
+                placeholder="e.g. 08123456789 or +628123456789"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+            </label>
+
+            <label className="full">
+              Service
+              <select
+                value={selectedServiceId}
+                onChange={(e) => setSelectedServiceId(Number(e.target.value))}
+                required
+              >
+                {services.length === 0 ? (
+                  <option value="">No active services configured</option>
+                ) : (
+                  services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.duration_min} min) · {formatRupiah(s.price)}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+
+            {!isWalkin && (
+              <>
+                <label>
+                  Appointment Date
+                  <input
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Start Time
+                  <input
+                    type="time"
+                    value={appointmentTime}
+                    onChange={(e) => setAppointmentTime(e.target.value)}
+                    required
+                  />
+                </label>
+              </>
+            )}
+
+            <label className="full">
+              Assigned Barber
+              <select
+                value={selectedStaffId}
+                onChange={(e) =>
+                  setSelectedStaffId(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                required={!isWalkin}
+              >
+                {isWalkin && <option value="">Next Available / Unassigned</option>}
+                {displayedBarbers.map((b) => {
+                  const staffId = "staff_id" in b ? b.staff_id : b.id
+                  const isAvailable = "available" in b ? b.available : b.active
+                  const displayLabel =
+                    "display_label" in b
+                      ? b.display_label
+                      : b.active
+                        ? "Available"
+                        : "Unavailable"
+                  const isSelected = selectedStaffId === staffId
+                  // Barber remains visible, but disabled for a new assignment if unavailable
+                  const isDisabled = !isAvailable && !isSelected
+
+                  return (
+                    <option key={staffId} value={staffId} disabled={isDisabled}>
+                      {b.name} — {displayLabel}
+                    </option>
+                  )
+                })}
+              </select>
+              {isLoadingAvailability && (
+                <small
+                  style={{
+                    color: "var(--muted)",
+                    fontSize: "11px",
+                    marginTop: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span className="btn-spinner" style={{ width: "10px", height: "10px" }} /> Checking
+                  barber availability...
+                </small>
+              )}
+              {availabilityError && (
+                <div style={{ color: "var(--danger)", fontSize: "11px", marginTop: "4px" }}>
+                  ⚠️ {availabilityError}
+                </div>
+              )}
+              {staffValidationMessage && (
+                <div
+                  style={{
+                    background: "#fef8ee",
+                    border: "1px solid #f3d49e",
+                    borderRadius: "4px",
+                    padding: "8px 10px",
+                    marginTop: "6px",
+                    color: "#75521e",
+                    fontSize: "11px",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  ⚠️ {staffValidationMessage}
+                </div>
+              )}
+            </label>
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="filter-button"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="primary-button" disabled={isSubmitDisabled}>
+              {isSubmitting ? (
+                <>
+                  <span className="btn-spinner" />
+                  <span>Saving...</span>
+                </>
+              ) : isWalkin ? (
+                "Add to Queue"
+              ) : (
+                "Confirm Booking"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
