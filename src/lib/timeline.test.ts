@@ -4,12 +4,20 @@ import {
   calculateTimelineConfig,
   getSlotTop,
   getNowPosition,
+  getStaffDayAvailability,
+  getBookingConflictReason,
   formatHourLabel,
   parseTimeString,
   DEFAULT_TIMELINE_START_HOUR,
   DEFAULT_TIMELINE_END_HOUR,
 } from "./timeline.ts"
-import type { ShopHour, ApiAppointment } from "./api.ts"
+import type {
+  ShopHour,
+  ShopClosure,
+  StaffHour,
+  StaffException,
+  ApiAppointment,
+} from "./api.ts"
 
 describe("timeline calculation and dynamic range", () => {
   it("parses time strings correctly", () => {
@@ -255,5 +263,159 @@ describe("timeline calculation and dynamic range", () => {
     // The early appointment at 06:00 is positioned at 1 hour offset (68px)
     const earlyTop = getSlotTop(earlyAppt.starts_at, "Asia/Jakarta", config.startHour, 68)
     assert.equal(earlyTop, 68)
+  })
+
+  it("9. Full-day and partial-day shop closures override regular weekly operating hours", () => {
+    const testDate = new Date("2026-10-27T10:00:00Z") // 2026-10-27 in Asia/Jakarta
+    const hours: ShopHour[] = [
+      { day_of_week: 2, is_open: true, open_time: "09:00:00", close_time: "20:00:00" },
+    ]
+
+    const fullClosure: ShopClosure = {
+      id: 10,
+      shop_id: 1,
+      start_date: "2026-10-27",
+      end_date: "2026-10-28",
+      is_closed: true,
+      reason: "Renovasi Interior",
+      created_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    }
+
+    const closedConfig = calculateTimelineConfig({
+      shopHours: hours,
+      shopClosures: [fullClosure],
+      currentDate: testDate,
+      timezone: "Asia/Jakarta",
+    })
+    assert.equal(closedConfig.isClosed, true)
+    assert.equal(closedConfig.closure?.id, 10)
+    assert.equal(closedConfig.closure?.reason, "Renovasi Interior")
+
+    const partialClosure: ShopClosure = {
+      id: 11,
+      shop_id: 1,
+      start_date: "2026-10-27",
+      end_date: "2026-10-27",
+      is_closed: false,
+      open_time: "11:00:00",
+      close_time: "16:00:00",
+      reason: "Acara Khusus",
+      created_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    }
+
+    const partialConfig = calculateTimelineConfig({
+      shopHours: hours,
+      shopClosures: [partialClosure],
+      currentDate: testDate,
+      timezone: "Asia/Jakarta",
+    })
+    assert.equal(partialConfig.isClosed, false)
+    assert.equal(partialConfig.closure?.id, 11)
+    assert.equal(partialConfig.effectiveOpenTime, "11:00")
+    assert.equal(partialConfig.effectiveCloseTime, "16:00")
+    // 11:00 - 1h = 10:00, 16:00 + 1h = 17:00
+    assert.equal(partialConfig.startHour, 10)
+    assert.equal(partialConfig.endHour, 17)
+  })
+
+  it("10. Evaluates kapster availability and booking conflicts accurately", () => {
+    const staffHours: StaffHour[] = [
+      {
+        staff_id: 5,
+        day_of_week: 2, // Tuesday
+        is_working: false,
+        open_time: "09:00:00",
+        close_time: "17:00:00",
+      },
+      {
+        staff_id: 6,
+        day_of_week: 2, // Tuesday
+        is_working: true,
+        open_time: "10:00:00",
+        close_time: "18:00:00",
+      },
+    ]
+
+    const staffExceptions: StaffException[] = [
+      {
+        id: 100,
+        shop_id: 1,
+        staff_id: 6,
+        start_date: "2026-10-27",
+        end_date: "2026-10-27",
+        is_working: false,
+        reason: "Cuti Tahunan",
+        created_at: "2026-10-01T00:00:00Z",
+        updated_at: "2026-10-01T00:00:00Z",
+      },
+    ]
+
+    // Staff 5 has recurring Tuesday day off
+    const avail5 = getStaffDayAvailability(5, "2026-10-27", 2, staffHours, staffExceptions)
+    assert.equal(avail5.status, "day_off")
+    assert.equal(avail5.isWorking, false)
+
+    // Staff 6 has one-time leave on 2026-10-27 overriding their Tuesday working schedule
+    const avail6 = getStaffDayAvailability(6, "2026-10-27", 2, staffHours, staffExceptions)
+    assert.equal(avail6.status, "leave")
+    assert.equal(avail6.isWorking, false)
+    assert.equal(avail6.reason, "Cuti Tahunan")
+
+    // Booking conflict detection for staff 6 on leave
+    const conflictLeave = getBookingConflictReason(
+      {
+        startsAt: "2026-10-27T11:00:00+07:00",
+        endsAt: "2026-10-27T11:30:00+07:00",
+        staffId: 6,
+      },
+      {
+        timezone: "Asia/Jakarta",
+        staffHours,
+        staffExceptions,
+      }
+    )
+    assert.equal(conflictLeave, "staff_unavailable")
+
+    // Booking conflict detection when shop closure is active
+    const conflictShopClosure = getBookingConflictReason(
+      {
+        startsAt: "2026-10-27T11:00:00+07:00",
+        endsAt: "2026-10-27T11:30:00+07:00",
+        staffId: 7,
+      },
+      {
+        timezone: "Asia/Jakarta",
+        shopClosures: [
+          {
+            id: 20,
+            shop_id: 1,
+            start_date: "2026-10-27",
+            end_date: "2026-10-27",
+            is_closed: true,
+            reason: "Libur Nasional",
+            created_at: "2026-10-01T00:00:00Z",
+            updated_at: "2026-10-01T00:00:00Z",
+          },
+        ],
+      }
+    )
+    assert.equal(conflictShopClosure, "shop_closed")
+
+    // Valid booking on an open day for available staff 7
+    const noConflict = getBookingConflictReason(
+      {
+        startsAt: "2026-10-27T11:00:00+07:00",
+        endsAt: "2026-10-27T11:30:00+07:00",
+        staffId: 7,
+      },
+      {
+        timezone: "Asia/Jakarta",
+        staffHours,
+        staffExceptions,
+      }
+    )
+    assert.equal(noConflict, null)
   })
 })

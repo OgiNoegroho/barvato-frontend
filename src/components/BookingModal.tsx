@@ -180,27 +180,50 @@ export function BookingModal({
     return availabilityList.find((a) => a.staff_id === Number(selectedStaffId)) || null
   }, [selectedStaffId, availabilityList])
 
+  // Check if the shop itself is closed at the selected time across all kapsters
+  const shopClosedReason = useMemo(() => {
+    if (availabilityList.length === 0) return null
+    const first = availabilityList[0]
+    if (!first.available && first.reason && first.reason.toLowerCase().startsWith("shop closed")) {
+      return first.reason
+    }
+    return null
+  }, [availabilityList])
+
   // Formatted validation message when selected barber is busy or unavailable
   const staffValidationMessage = useMemo(() => {
+    if (shopClosedReason) {
+      return t("booking.shopClosedError", { reason: shopClosedReason })
+    }
     if (!selectedStaffAvailability) return null
     if (selectedStaffAvailability.available) return null
 
     if (selectedStaffAvailability.conflict_type === "appointment") {
       const start = selectedStaffAvailability.conflict_start || ""
       const end = selectedStaffAvailability.conflict_end || ""
-      return `${selectedStaffAvailability.name} already has an appointment from ${start} to ${end}. Choose another barber or change the time.`
+      return language === "id"
+        ? `${selectedStaffAvailability.name} sudah memiliki janji temu pukul ${start}–${end}. Pilih kapster lain atau ubah waktu.`
+        : `${selectedStaffAvailability.name} already has an appointment from ${start} to ${end}. Choose another barber or change the time.`
     }
     if (selectedStaffAvailability.conflict_type === "walkin") {
-      return `${selectedStaffAvailability.name} is currently serving another customer. Choose another barber or change the time.`
+      return language === "id"
+        ? `${selectedStaffAvailability.name} sedang melayani pelanggan lain. Pilih kapster lain atau ubah waktu.`
+        : `${selectedStaffAvailability.name} is currently serving another customer. Choose another barber or change the time.`
     }
     if (selectedStaffAvailability.status === "outside_working_hours") {
-      return `This barber is unavailable at the selected time (outside working hours). Choose another barber or change the appointment time.`
+      return t("booking.staffOutsideHoursError")
     }
     if (selectedStaffAvailability.status === "unavailable") {
-      return `This barber is unavailable at the selected time (${selectedStaffAvailability.reason || "day off"}). Choose another barber or change the appointment time.`
+      return t("booking.staffUnavailableError", {
+        name: selectedStaffAvailability.name,
+        reason: selectedStaffAvailability.reason || (language === "id" ? "sedang libur/cuti" : "day off"),
+      })
     }
-    return `This barber is unavailable at the selected time. Choose another barber or change the appointment time.`
-  }, [selectedStaffAvailability])
+    return t("booking.staffUnavailableError", {
+      name: selectedStaffAvailability.name,
+      reason: selectedStaffAvailability.reason || (language === "id" ? "tidak tersedia" : "unavailable"),
+    })
+  }, [selectedStaffAvailability, shopClosedReason, t, language])
 
   const handleSelectCustomer = (c: CustomerItem) => {
     setSelectedCustomerId(c.id)
@@ -216,6 +239,7 @@ export function BookingModal({
   const isSubmitDisabled =
     isSubmitting ||
     isLoadingCatalog ||
+    Boolean(shopClosedReason) ||
     !customerName.trim() ||
     !selectedServiceId ||
     (!isWalkin && !selectedStaffId) ||
@@ -233,17 +257,30 @@ export function BookingModal({
     const trimmedPhone = customerPhone.trim()
 
     if (!trimmedName) {
-      setErrorMessage("Customer name is required.")
+      setErrorMessage(
+        language === "id" ? "Nama pelanggan wajib diisi." : "Customer name is required."
+      )
       return
     }
 
     if (!selectedServiceId) {
-      setErrorMessage("Please select a service.")
+      setErrorMessage(
+        language === "id" ? "Silakan pilih layanan." : "Please select a service."
+      )
       return
     }
 
     if (!isWalkin && !selectedStaffId) {
-      setErrorMessage("Please select an assigned barber for this appointment.")
+      setErrorMessage(
+        language === "id"
+          ? "Silakan pilih kapster untuk janji temu ini."
+          : "Please select an assigned barber for this appointment."
+      )
+      return
+    }
+
+    if (shopClosedReason) {
+      setErrorMessage(t("booking.shopClosedError", { reason: shopClosedReason }))
       return
     }
 
@@ -253,7 +290,12 @@ export function BookingModal({
       !selectedStaffAvailability.available &&
       selectedStaffId !== initialStaffId
     ) {
-      setErrorMessage(staffValidationMessage || "The selected barber is not available at this time.")
+      setErrorMessage(
+        staffValidationMessage ||
+          (language === "id"
+            ? "Kapster yang dipilih tidak tersedia pada waktu ini."
+            : "The selected barber is not available at this time.")
+      )
       return
     }
 
@@ -281,7 +323,11 @@ export function BookingModal({
             customerId = newCust.customer.id
           } catch {
             if (!isWalkin) {
-              throw new Error("Failed to register customer record. Please check phone format.")
+              throw new Error(
+                language === "id"
+                  ? "Gagal mendaftarkan pelanggan. Periksa format nomor telepon."
+                  : "Failed to register customer record. Please check phone format."
+              )
             }
           }
         }
@@ -295,13 +341,21 @@ export function BookingModal({
           service_id: Number(selectedServiceId),
           assigned_staff_id: selectedStaffId ? Number(selectedStaffId) : null,
         })
-        onSuccess(`${trimmedName} added to walk-in queue`)
+        onSuccess(
+          language === "id"
+            ? `${trimmedName} ditambahkan ke antrean walk-in`
+            : `${trimmedName} added to walk-in queue`
+        )
         onClose()
       } else {
         const startsAt = getIsoWithTimezone(appointmentDate, appointmentTime, shopTimezone)
 
         if (!customerId) {
-          throw new Error("A customer record is required to schedule an appointment.")
+          throw new Error(
+            language === "id"
+              ? "Data pelanggan diperlukan untuk menjadwalkan janji temu."
+              : "A customer record is required to schedule an appointment."
+          )
         }
 
         await appointmentApi.create({
@@ -311,34 +365,42 @@ export function BookingModal({
           starts_at: startsAt,
           override,
         })
-        onSuccess(`Appointment booked for ${trimmedName} at ${appointmentTime}`)
+        onSuccess(
+          language === "id"
+            ? `Janji temu berhasil dibuat untuk ${trimmedName} pukul ${appointmentTime}`
+            : `Appointment booked for ${trimmedName} at ${appointmentTime}`
+        )
         onClose()
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.isConflict) {
-          if (err.code === "schedule_conflict") {
-            setConflictPrompt(
-              "Schedule warning: The barber is currently in service with another customer. Would you like to override and book anyway?"
+          if (err.code === "shop_closed") {
+            setErrorMessage(
+              t("booking.shopClosedError", { reason: err.message })
             )
+            return
+          }
+          if (err.code === "staff_unavailable") {
+            setErrorMessage(err.message)
+            return
+          }
+          if (err.code === "schedule_conflict") {
+            setConflictPrompt(t("booking.conflictScheduleWarning"))
             return
           }
           if (err.code === "appointment_overlap") {
-            setErrorMessage(
-              "Conflict: The selected barber is already booked for another appointment during this time window."
-            )
+            setErrorMessage(t("booking.conflictAppointmentOverlap"))
             return
           }
           if (err.code === "barber_busy") {
-            setErrorMessage(
-              err.message || "Conflict: The selected barber is already busy and cannot take another service."
-            )
+            setErrorMessage(err.message || t("booking.conflictBarberBusy"))
             return
           }
         }
-        setErrorMessage(err.message || "Operation failed.")
+        setErrorMessage(err.message || t("common.error"))
       } else {
-        setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.")
+        setErrorMessage(err instanceof Error ? err.message : t("common.error"))
       }
     } finally {
       setIsSubmitting(false)
@@ -613,12 +675,14 @@ export function BookingModal({
               {staffValidationMessage && (
                 <div
                   style={{
-                    background: "#fef8ee",
-                    border: "1px solid #f3d49e",
+                    background: shopClosedReason ? "rgba(207, 60, 60, 0.1)" : "#fef8ee",
+                    border: shopClosedReason
+                      ? "1px solid rgba(207, 60, 60, 0.35)"
+                      : "1px solid #f3d49e",
                     borderRadius: "4px",
                     padding: "8px 10px",
                     marginTop: "6px",
-                    color: "#75521e",
+                    color: shopClosedReason ? "var(--danger)" : "#75521e",
                     fontSize: "11px",
                     lineHeight: "1.4",
                   }}

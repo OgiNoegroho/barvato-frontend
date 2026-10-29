@@ -41,8 +41,8 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
         err instanceof Error
           ? err.message
           : language === "id"
-          ? "Gagal mencatat pembayaran"
-          : "Failed to record payment"
+            ? "Gagal mencatat pembayaran"
+            : "Failed to record payment"
       setErrorMessage(message)
     } finally {
       setIsSubmitting(false)

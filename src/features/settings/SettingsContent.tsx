@@ -10,6 +10,8 @@ import {
   type ServiceItem,
   type ShopDetails,
   type ShopHour,
+  type ShopClosure,
+  type BookingConflictDetails,
   type StaffItem,
   type ShopPayrollSettings,
   ApiError,
@@ -101,6 +103,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
   const { currentShop, updateCurrentShop } = useAuth()
   const canManageSettings = currentShop?.role === "owner"
+  const canManageSchedule = currentShop?.role === "owner" || currentShop?.role === "manager"
 
   // --- Shop Profile State ---
   const [shopDetails, setShopDetails] = useState<ShopDetails | null>(null)
@@ -283,12 +286,139 @@ export function SettingsContent({ section }: SettingsContentProps) {
     }
   }, [section, loadStaff])
 
-  // --- Business Hours State ---
+  // --- Business Hours & Shop Closures State ---
   const [hoursMap, setHoursMap] = useState<Record<number, ShopHour>>({})
   const [isLoadingHours, setIsLoadingHours] = useState(false)
   const [hoursError, setHoursError] = useState<string | null>(null)
   const [isHoursDirty, setIsHoursDirty] = useState(false)
   const [isSavingHours, setIsSavingHours] = useState(false)
+
+  const [closures, setClosures] = useState<ShopClosure[]>([])
+  const [isLoadingClosures, setIsLoadingClosures] = useState(false)
+  const [closureError, setClosureError] = useState<string | null>(null)
+  const [isClosureFormOpen, setIsClosureFormOpen] = useState(false)
+  const [editingClosure, setEditingClosure] = useState<ShopClosure | null>(null)
+  const [closureStartDate, setClosureStartDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [closureEndDate, setClosureEndDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [closureIsClosed, setClosureIsClosed] = useState(true)
+  const [closureOpenTime, setClosureOpenTime] = useState("10:00")
+  const [closureCloseTime, setClosureCloseTime] = useState("18:00")
+  const [closureReason, setClosureReason] = useState("")
+  const [isSavingClosure, setIsSavingClosure] = useState(false)
+  const [closureConflicts, setClosureConflicts] = useState<BookingConflictDetails | null>(null)
+
+  const loadClosures = useCallback(async () => {
+    setIsLoadingClosures(true)
+    try {
+      const res = await shopApi.listClosures()
+      setClosures(res.closures || [])
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setClosureError(err.message)
+      }
+    } finally {
+      setIsLoadingClosures(false)
+    }
+  }, [])
+
+  const openCreateClosure = () => {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    setEditingClosure(null)
+    setClosureStartDate(todayStr)
+    setClosureEndDate(todayStr)
+    setClosureIsClosed(true)
+    setClosureOpenTime("10:00")
+    setClosureCloseTime("18:00")
+    setClosureReason("")
+    setClosureError(null)
+    setClosureConflicts(null)
+    setIsClosureFormOpen(true)
+  }
+
+  const openEditClosure = (c: ShopClosure) => {
+    setEditingClosure(c)
+    setClosureStartDate(c.start_date)
+    setClosureEndDate(c.end_date)
+    setClosureIsClosed(c.is_closed)
+    setClosureOpenTime(formatTimeForInput(c.open_time, "10:00"))
+    setClosureCloseTime(formatTimeForInput(c.close_time, "18:00"))
+    setClosureReason(c.reason || "")
+    setClosureError(null)
+    setClosureConflicts(null)
+    setIsClosureFormOpen(true)
+  }
+
+  const handleSaveClosure = async (confirmConflicts = false) => {
+    if (!canManageSchedule || isSavingClosure) return
+    setClosureError(null)
+
+    if (!closureStartDate || !closureEndDate) {
+      setClosureError(language === "id" ? "Tanggal mulai dan selesai wajib diisi." : "Start and end dates are required.")
+      return
+    }
+    if (closureEndDate < closureStartDate) {
+      setClosureError(
+        language === "id"
+          ? "Tanggal selesai harus sama atau setelah tanggal mulai."
+          : "End date must be on or after start date."
+      )
+      return
+    }
+    if (!closureIsClosed && closureOpenTime >= closureCloseTime) {
+      setClosureError(
+        language === "id"
+          ? "Jam tutup harus setelah jam buka."
+          : "Closing time must be after opening time."
+      )
+      return
+    }
+
+    setIsSavingClosure(true)
+    try {
+      const payload = {
+        start_date: closureStartDate,
+        end_date: closureEndDate,
+        is_closed: closureIsClosed,
+        open_time: closureIsClosed ? null : formatTimeForApi(closureOpenTime, "10:00:00"),
+        close_time: closureIsClosed ? null : formatTimeForApi(closureCloseTime, "18:00:00"),
+        reason: closureReason.trim(),
+        confirm_conflicts: confirmConflicts,
+      }
+      if (editingClosure) {
+        await shopApi.updateClosure(editingClosure.id, payload)
+      } else {
+        await shopApi.createClosure(payload)
+      }
+      setIsClosureFormOpen(false)
+      setEditingClosure(null)
+      setClosureConflicts(null)
+      showToast(t("closures.savedToast"))
+      await loadClosures()
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === "existing_bookings_conflict" && err.details) {
+        setClosureConflicts(err.details as BookingConflictDetails)
+      } else if (err instanceof Error) {
+        setClosureError(err.message)
+      } else {
+        setClosureError(language === "id" ? "Gagal menyimpan jadwal penutupan." : "Failed to save shop closure.")
+      }
+    } finally {
+      setIsSavingClosure(false)
+    }
+  }
+
+  const handleDeleteClosure = async (id: number) => {
+    if (!canManageSchedule) return
+    try {
+      await shopApi.deleteClosure(id)
+      showToast(t("closures.deletedToast"))
+      await loadClosures()
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setClosureError(err.message)
+      }
+    }
+  }
 
   const loadHours = useCallback(async () => {
     setIsLoadingHours(true)
@@ -328,8 +458,9 @@ export function SettingsContent({ section }: SettingsContentProps) {
   useEffect(() => {
     if (section === "Hours & availability") {
       loadHours()
+      loadClosures()
     }
-  }, [section, loadHours])
+  }, [section, loadHours, loadClosures])
 
   const handleToggleDay = (day: number, checked: boolean) => {
     setHoursMap((prev) => {
@@ -657,7 +788,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           {isLoadingHours ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              Loading operating hours from server...
+              {language === "id" ? "Memuat jam operasional dari server..." : "Loading operating hours from server..."}
             </div>
           ) : (
             <div className="hours-list">
@@ -676,6 +807,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                       <input
                         type="checkbox"
                         checked={hour.is_open}
+                        disabled={!canManageSchedule}
                         onChange={(e) => handleToggleDay(wd.day, e.target.checked)}
                       />
                       <i />
@@ -685,12 +817,14 @@ export function SettingsContent({ section }: SettingsContentProps) {
                       <>
                         <input
                           type="time"
+                          disabled={!canManageSchedule}
                           value={formatTimeForInput(hour.open_time, "09:00")}
                           onChange={(e) => handleTimeChange(wd.day, "open_time", e.target.value)}
                         />
                         <span className="hours-sep">{language === "id" ? "sampai" : "to"}</span>
                         <input
                           type="time"
+                          disabled={!canManageSchedule}
                           value={formatTimeForInput(hour.close_time, "21:00")}
                           onChange={(e) => handleTimeChange(wd.day, "close_time", e.target.value)}
                         />
@@ -703,6 +837,325 @@ export function SettingsContent({ section }: SettingsContentProps) {
               })}
             </div>
           )}
+
+          {canManageSchedule && (
+            <button
+              type="button"
+              className="primary-button settings-save"
+              style={{ marginTop: "16px" }}
+              onClick={handleSaveHours}
+              disabled={isSavingHours || !isHoursDirty}
+            >
+              {isSavingHours
+                ? language === "id"
+                  ? "Menyimpan jam operasional..."
+                  : "Saving hours..."
+                : isHoursDirty
+                  ? language === "id"
+                    ? "Simpan perubahan *"
+                    : "Save changes *"
+                  : language === "id"
+                    ? "Jam operasional tersimpan"
+                    : "Hours saved"}
+            </button>
+          )}
+
+          {/* --- Shop Closures & Special Operating Hours --- */}
+          <div
+            style={{
+              marginTop: "36px",
+              paddingTop: "28px",
+              borderTop: "1px solid var(--line)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px", fontSize: "15px", color: "var(--ink)" }}>
+                  {t("closures.title")}
+                </h3>
+                <p style={{ margin: 0, fontSize: "11px", color: "var(--muted)" }}>
+                  {t("closures.subtitle")}
+                </p>
+              </div>
+              {canManageSchedule && !isClosureFormOpen && (
+                <button
+                  type="button"
+                  className="filter-button"
+                  style={{ fontWeight: 600 }}
+                  onClick={openCreateClosure}
+                >
+                  {t("closures.addButton")}
+                </button>
+              )}
+            </div>
+
+            {closureError && (
+              <div
+                className="login-error-alert"
+                role="alert"
+                style={{
+                  marginBottom: "14px",
+                  padding: "10px 14px",
+                  border: "1px solid var(--danger)",
+                  background: "rgba(207, 60, 60, 0.08)",
+                  color: "var(--red, #cf3c3c)",
+                  fontSize: "11px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <Icon name="bell" size={14} />
+                <span>{closureError}</span>
+              </div>
+            )}
+
+            {isClosureFormOpen && canManageSchedule && (
+              <div
+                style={{
+                  padding: "16px",
+                  background: "var(--surface-raised, #faf9f7)",
+                  border: "1px solid var(--line)",
+                  marginBottom: "18px",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: "12px", marginBottom: "12px", color: "var(--ink)" }}>
+                  {editingClosure ? t("closures.editTitle") : t("closures.createTitle")}
+                </strong>
+
+                <div className="form-grid">
+                  <label>
+                    {t("closures.startDate")} *
+                    <input
+                      type="date"
+                      value={closureStartDate}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setClosureStartDate(v)
+                        if (closureEndDate < v) setClosureEndDate(v)
+                        setClosureConflicts(null)
+                      }}
+                    />
+                  </label>
+                  <label>
+                    {t("closures.endDate")} *
+                    <input
+                      type="date"
+                      min={closureStartDate}
+                      value={closureEndDate}
+                      onChange={(e) => {
+                        setClosureEndDate(e.target.value)
+                        setClosureConflicts(null)
+                      }}
+                    />
+                  </label>
+
+                  <label className="full">
+                    {t("closures.modeLabel")}
+                    <select
+                      value={closureIsClosed ? "closed" : "adjusted"}
+                      onChange={(e) => {
+                        setClosureIsClosed(e.target.value === "closed")
+                        setClosureConflicts(null)
+                      }}
+                    >
+                      <option value="closed">{t("closures.fullDayClosed")}</option>
+                      <option value="adjusted">{t("closures.adjustedHours")}</option>
+                    </select>
+                  </label>
+
+                  {!closureIsClosed && (
+                    <>
+                      <label>
+                        {t("closures.openTime")} *
+                        <input
+                          type="time"
+                          value={closureOpenTime}
+                          onChange={(e) => {
+                            setClosureOpenTime(e.target.value)
+                            setClosureConflicts(null)
+                          }}
+                        />
+                      </label>
+                      <label>
+                        {t("closures.closeTime")} *
+                        <input
+                          type="time"
+                          value={closureCloseTime}
+                          onChange={(e) => {
+                            setClosureCloseTime(e.target.value)
+                            setClosureConflicts(null)
+                          }}
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  <label className="full">
+                    {t("closures.reasonLabel")}
+                    <input
+                      type="text"
+                      value={closureReason}
+                      placeholder={t("closures.reasonPlaceholder")}
+                      onChange={(e) => setClosureReason(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                {closureConflicts && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: "14px",
+                      padding: "12px 14px",
+                      border: "1px solid var(--red, #cf3c3c)",
+                      background: "rgba(207, 60, 60, 0.08)",
+                      color: "var(--ink)",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <strong style={{ color: "var(--red, #cf3c3c)", display: "block", marginBottom: "4px" }}>
+                      {t("closures.conflictWarningTitle")}
+                    </strong>
+                    <p style={{ margin: "0 0 8px", color: "var(--muted)" }}>
+                      {t("closures.conflictWarningDesc")}
+                    </p>
+                    <ul style={{ margin: "0 0 10px", paddingLeft: "18px" }}>
+                      {(closureConflicts.affected_appointments || []).map((a) => (
+                        <li key={`appt-${a.id}`}>
+                          <strong>{a.customer_name}</strong> — {a.service_name} ({a.staff_name},{" "}
+                          {new Date(a.starts_at).toLocaleString(language === "id" ? "id-ID" : "en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })})
+                        </li>
+                      ))}
+                      {(closureConflicts.affected_walk_ins || []).map((w) => (
+                        <li key={`walkin-${w.id}`}>
+                          <strong>{w.customer_name}</strong> — {w.service_name} ({w.assigned_staff_name || t("booking.anyBarber")})
+                        </li>
+                      ))}
+                    </ul>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        style={{ background: "var(--red, #cf3c3c)", borderColor: "var(--red, #cf3c3c)" }}
+                        disabled={isSavingClosure}
+                        onClick={() => handleSaveClosure(true)}
+                      >
+                        {t("closures.confirmAndSave")}
+                      </button>
+                      <button
+                        type="button"
+                        className="filter-button"
+                        onClick={() => setClosureConflicts(null)}
+                      >
+                        {t("common.cancel")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!closureConflicts && (
+                  <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={isSavingClosure}
+                      onClick={() => handleSaveClosure(false)}
+                    >
+                      {isSavingClosure ? t("common.saving") : t("common.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className="filter-button"
+                      disabled={isSavingClosure}
+                      onClick={() => {
+                        setIsClosureFormOpen(false)
+                        setEditingClosure(null)
+                        setClosureConflicts(null)
+                      }}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isLoadingClosures ? (
+              <div style={{ padding: "18px 0", fontSize: "11px", color: "var(--muted)" }}>
+                {t("common.loading")}
+              </div>
+            ) : closures.length === 0 ? (
+              <div
+                style={{
+                  padding: "20px 14px",
+                  border: "1px dashed var(--line)",
+                  textAlign: "center",
+                  color: "var(--muted)",
+                  fontSize: "11px",
+                }}
+              >
+                {t("closures.empty")}
+              </div>
+            ) : (
+              <div className="service-settings">
+                {closures.map((c) => {
+                  const dateLabel =
+                    c.start_date === c.end_date
+                      ? c.start_date
+                      : `${c.start_date} – ${c.end_date}`
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        borderLeft: c.is_closed
+                          ? "3px solid var(--red, #cf3c3c)"
+                          : "3px solid var(--amber, #b7791f)",
+                        paddingLeft: "10px",
+                      }}
+                    >
+                      <span>
+                        <strong>{c.reason || (c.is_closed ? t("closures.badgeClosed") : t("closures.title"))}</strong>
+                        <small>{dateLabel}</small>
+                      </span>
+                      <Badge tone={c.is_closed ? "danger" : "warning"}>
+                        {c.is_closed
+                          ? t("closures.badgeClosed")
+                          : t("closures.badgeAdjusted", {
+                              open: formatTimeForInput(c.open_time, "09:00"),
+                              close: formatTimeForInput(c.close_time, "21:00"),
+                            })}
+                      </Badge>
+                      {canManageSchedule && (
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            type="button"
+                            className="filter-button"
+                            onClick={() => openEditClosure(c)}
+                          >
+                            {t("common.edit")}
+                          </button>
+                          <button
+                            type="button"
+                            className="filter-button"
+                            style={{ color: "var(--red, #cf3c3c)" }}
+                            onClick={() => handleDeleteClosure(c.id)}
+                          >
+                            {t("common.delete")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1130,27 +1583,6 @@ export function SettingsContent({ section }: SettingsContentProps) {
               : language === "id"
                 ? "Profil tersimpan"
                 : "Profile saved"}
-        </button>
-      )}
-
-      {section === "Hours & availability" && (
-        <button
-          type="button"
-          className="primary-button settings-save"
-          onClick={handleSaveHours}
-          disabled={isSavingHours || !isHoursDirty}
-        >
-          {isSavingHours
-            ? language === "id"
-              ? "Menyimpan jam operasional..."
-              : "Saving hours..."
-            : isHoursDirty
-              ? language === "id"
-                ? "Simpan perubahan *"
-                : "Save changes *"
-              : language === "id"
-                ? "Jam operasional tersimpan"
-                : "Hours saved"}
         </button>
       )}
 

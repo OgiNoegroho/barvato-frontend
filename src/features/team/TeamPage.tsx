@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react"
-import { staffApi, type StaffItem, ApiError } from "../../lib/api"
+import {
+  staffApi,
+  type StaffItem,
+  type StaffHour,
+  type StaffException,
+  ApiError,
+} from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
 import { Toast } from "../../components/layout/Toast"
@@ -12,10 +18,15 @@ import { useI18n } from "../../lib/i18n"
 export function TeamPage() {
   const { t, language } = useI18n()
   const [staffList, setStaffList] = useState<StaffItem[]>([])
+  const [staffHours, setStaffHours] = useState<StaffHour[]>([])
+  const [todayExceptions, setTodayExceptions] = useState<StaffException[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const [selectedStaffForSchedule, setSelectedStaffForSchedule] = useState<StaffItem | null>(null)
+  const [selectedStaffForSchedule, setSelectedStaffForSchedule] = useState<{
+    staff: StaffItem
+    tab: "agenda" | "weekly" | "exceptions"
+  } | null>(null)
   const [staffForCompensation, setStaffForCompensation] = useState<StaffItem | null>(null)
   const [staffToEdit, setStaffToEdit] = useState<StaffItem | null>(null)
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false)
@@ -30,9 +41,16 @@ export function TeamPage() {
   const loadStaff = useCallback(async () => {
     setIsLoading(true)
     setErrorMessage(null)
+    const todayStr = new Date().toISOString().slice(0, 10)
     try {
-      const res = await staffApi.list(false)
+      const [res, hoursRes, excRes] = await Promise.all([
+        staffApi.list(false),
+        staffApi.getAllHours().catch(() => ({ staff_hours: [] })),
+        staffApi.listAllExceptions({ from: todayStr, to: todayStr }).catch(() => ({ exceptions: [] })),
+      ])
       setStaffList(res.staff || [])
+      setStaffHours(hoursRes.staff_hours || [])
+      setTodayExceptions(excRes.exceptions || [])
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message || `Failed to load team roster (${err.code})`)
@@ -49,6 +67,8 @@ export function TeamPage() {
   useEffect(() => {
     loadStaff()
   }, [loadStaff])
+
+  const todayDow = new Date().getDay()
 
   return (
     <>
@@ -131,6 +151,37 @@ export function TeamPage() {
                 ? "Tarif standar"
                 : "Standard rate"
 
+            const todayExc = todayExceptions.find((e) => e.staff_id === st.id)
+            const todayHour = staffHours.find((h) => h.staff_id === st.id && h.day_of_week === todayDow)
+
+            let todayStatusText = st.active
+              ? t("overview.chairAvailable")
+              : language === "id"
+              ? "Nonaktif"
+              : "Inactive"
+            let statusColor: string | undefined
+
+            if (st.active) {
+              if (todayExc) {
+                if (!todayExc.is_working) {
+                  todayStatusText = todayExc.reason
+                    ? `${t("calendar.staffLeaveBadge")} (${todayExc.reason})`
+                    : t("calendar.staffLeaveBadge")
+                  statusColor = "var(--red, #cf3c3c)"
+                } else if (todayExc.open_time && todayExc.close_time) {
+                  todayStatusText = `${todayExc.open_time.slice(0, 5)}–${todayExc.close_time.slice(0, 5)}`
+                  statusColor = "var(--amber, #b7791f)"
+                }
+              } else if (todayHour) {
+                if (!todayHour.is_working) {
+                  todayStatusText = t("calendar.staffDayOffBadge")
+                  statusColor = "var(--red, #cf3c3c)"
+                } else {
+                  todayStatusText = `${todayHour.open_time.slice(0, 5)}–${todayHour.close_time.slice(0, 5)}`
+                }
+              }
+            }
+
             return (
               <article className="team-card" key={st.id}>
                 <div className="team-top">
@@ -160,12 +211,8 @@ export function TeamPage() {
                 <div className="team-stats">
                   <span>
                     <small>{t("common.status").toUpperCase()}</small>
-                    <strong style={{ fontSize: "11px" }}>
-                      {st.active
-                        ? t("overview.chairAvailable")
-                        : language === "id"
-                        ? "Libur"
-                        : "Off Duty"}
+                    <strong style={{ fontSize: "11px", color: statusColor }}>
+                      {todayStatusText}
                     </strong>
                   </span>
                   <span>
@@ -183,13 +230,21 @@ export function TeamPage() {
                     {language === "id" ? "Kompensasi" : "Compensation"}
                   </button>
                   <button
-                    className="wide-button"
-                    style={{ margin: 0, justifyContent: "center" }}
-                    onClick={() => setSelectedStaffForSchedule(st)}
+                    className="filter-button"
+                    style={{ fontSize: "11px", padding: "8px 6px", justifyContent: "center" }}
+                    onClick={() => setSelectedStaffForSchedule({ staff: st, tab: "exceptions" })}
                   >
-                    {t("overview.schedule")} <Icon name="arrow" size={15} />
+                    {t("availability.tabExceptions")}
                   </button>
                 </div>
+
+                <button
+                  className="wide-button"
+                  style={{ marginTop: "8px", justifyContent: "center", width: "100%" }}
+                  onClick={() => setSelectedStaffForSchedule({ staff: st, tab: "agenda" })}
+                >
+                  {t("overview.schedule")} <Icon name="arrow" size={15} />
+                </button>
               </article>
             )
           })}
@@ -198,8 +253,13 @@ export function TeamPage() {
 
       {selectedStaffForSchedule && (
         <TeamSchedule
-          staff={selectedStaffForSchedule}
+          staff={selectedStaffForSchedule.staff}
+          initialTab={selectedStaffForSchedule.tab}
           onClose={() => setSelectedStaffForSchedule(null)}
+          onUpdated={(msg) => {
+            if (msg) showToast(msg)
+            loadStaff()
+          }}
         />
       )}
 

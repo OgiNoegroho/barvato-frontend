@@ -1,4 +1,11 @@
-import type { ShopHour, ApiAppointment, ApiQueueEntry } from "./api.ts"
+import type {
+  ShopHour,
+  ShopClosure,
+  StaffHour,
+  StaffException,
+  ApiAppointment,
+  ApiQueueEntry,
+} from "./api.ts"
 import {
   getTimeInTimezone,
   getDateStringInTimezone,
@@ -38,16 +45,32 @@ export interface TimelineConfig {
   isOvernight: boolean
   /** Whether the shop is designated as closed on the evaluated calendar date */
   isClosed: boolean
+  /** Active shop closure or special operating-hour exception on the evaluated calendar date */
+  closure?: ShopClosure | null
+  /** Effective opening time (HH:MM) for the evaluated date */
+  effectiveOpenTime: string
+  /** Effective closing time (HH:MM) for the evaluated date */
+  effectiveCloseTime: string
 }
 
 export interface CalculateTimelineOptions {
   shopHours?: ShopHour[] | null
+  shopClosures?: ShopClosure[] | null
   currentDate?: Date | string
   timezone?: string
   appointments?: ApiAppointment[]
   queueItems?: ApiQueueEntry[]
   slotHeight?: number
   view?: string
+}
+
+export interface StaffDayAvailability {
+  status: "available" | "day_off" | "leave" | "adjusted" | "custom_hours"
+  isWorking: boolean
+  openTime?: string | null
+  closeTime?: string | null
+  reason?: string | null
+  exception?: StaffException | null
 }
 
 /**
@@ -90,6 +113,7 @@ export function formatHourLabel(hour: number): string {
 export function calculateTimelineConfig(options: CalculateTimelineOptions = {}): TimelineConfig {
   const {
     shopHours,
+    shopClosures,
     currentDate = new Date(),
     timezone = "Asia/Jakarta",
     appointments = [],
@@ -100,12 +124,14 @@ export function calculateTimelineConfig(options: CalculateTimelineOptions = {}):
 
   const evaluatedDate = typeof currentDate === "string" ? new Date(currentDate) : currentDate
   const dayOfWeek = getDayOfWeekInTimezone(evaluatedDate, timezone)
+  const viewedDateStr = getDateStringInTimezone(evaluatedDate, timezone)
 
   let openHour = DEFAULT_OPEN_HOUR
   let openMinute = DEFAULT_OPEN_MINUTE
   let closeHour = DEFAULT_CLOSE_HOUR
   let closeMinute = DEFAULT_CLOSE_MINUTE
   let isClosed = false
+  let activeClosure: ShopClosure | null = null
 
   if (shopHours && shopHours.length > 0) {
     if (view === "Day") {
@@ -150,6 +176,30 @@ export function calculateTimelineConfig(options: CalculateTimelineOptions = {}):
     }
   }
 
+  // Evaluate shop closures / special operating hours on the viewed date
+  if (view === "Day" && shopClosures && shopClosures.length > 0) {
+    const matchingClosures = shopClosures.filter(
+      (c) => c.start_date <= viewedDateStr && c.end_date >= viewedDateStr
+    )
+    if (matchingClosures.length > 0) {
+      // Full-day closure takes precedence over adjusted hours if both exist
+      activeClosure = matchingClosures.find((c) => c.is_closed) || matchingClosures[0]
+      if (activeClosure.is_closed) {
+        isClosed = true
+      } else {
+        isClosed = false
+        const parsedOpen = parseTimeString(activeClosure.open_time)
+        const parsedClose = parseTimeString(activeClosure.close_time)
+        if (parsedOpen && parsedClose) {
+          openHour = parsedOpen.hour
+          openMinute = parsedOpen.minute
+          closeHour = parsedClose.hour
+          closeMinute = parsedClose.minute
+        }
+      }
+    }
+  }
+
   // Check for overnight schedule (closeHour < openHour, e.g. 20:00 to 04:00)
   const isOvernight = closeHour < openHour
 
@@ -172,8 +222,6 @@ export function calculateTimelineConfig(options: CalculateTimelineOptions = {}):
   // Preserve out-of-hours appointments and walk-ins:
   // If historical bookings or early/late arrivals exist outside standard business hours,
   // expand the timeline dynamically so records never disappear or get clipped out of view.
-  const viewedDateStr = getDateStringInTimezone(evaluatedDate, timezone)
-
   const relevantAppointments = appointments.filter((a) => {
     if (!a.starts_at) return false
     const apptDateStr = getDateStringInTimezone(a.starts_at, timezone)
@@ -254,6 +302,8 @@ export function calculateTimelineConfig(options: CalculateTimelineOptions = {}):
 
   const startFormatted = `${String(startHour).padStart(2, "0")}:00`
   const endFormatted = `${String(endHour % 24).padStart(2, "0")}:00`
+  const effectiveOpenTime = `${String(openHour).padStart(2, "0")}:${String(openMinute).padStart(2, "0")}`
+  const effectiveCloseTime = `${String(closeHour).padStart(2, "0")}:${String(closeMinute).padStart(2, "0")}`
 
   return {
     startHour,
@@ -265,7 +315,146 @@ export function calculateTimelineConfig(options: CalculateTimelineOptions = {}):
     totalHeight,
     isOvernight,
     isClosed,
+    closure: activeClosure,
+    effectiveOpenTime,
+    effectiveCloseTime,
   }
+}
+
+/**
+ * Evaluates a kapster's availability status on a given calendar date (YYYY-MM-DD) and day of week (0-6).
+ * Priority: one-time leave/exception (`staff_exceptions`) > recurring weekly schedule (`staff_hours`).
+ */
+export function getStaffDayAvailability(
+  staffId: number,
+  dateStr: string,
+  dayOfWeek: number,
+  staffHours?: StaffHour[] | null,
+  staffExceptions?: StaffException[] | null
+): StaffDayAvailability {
+  if (staffExceptions && staffExceptions.length > 0) {
+    const matches = staffExceptions.filter(
+      (e) => e.staff_id === staffId && e.start_date <= dateStr && e.end_date >= dateStr
+    )
+    if (matches.length > 0) {
+      const exc = matches.find((e) => !e.is_working) || matches[0]
+      if (!exc.is_working) {
+        return {
+          status: "leave",
+          isWorking: false,
+          reason: exc.reason,
+          exception: exc,
+        }
+      }
+      return {
+        status: "adjusted",
+        isWorking: true,
+        openTime: exc.open_time ? exc.open_time.slice(0, 5) : null,
+        closeTime: exc.close_time ? exc.close_time.slice(0, 5) : null,
+        reason: exc.reason,
+        exception: exc,
+      }
+    }
+  }
+
+  if (staffHours && staffHours.length > 0) {
+    const sh = staffHours.find((h) => h.staff_id === staffId && h.day_of_week === dayOfWeek)
+    if (sh) {
+      if (!sh.is_working) {
+        return {
+          status: "day_off",
+          isWorking: false,
+        }
+      }
+      return {
+        status: "custom_hours",
+        isWorking: true,
+        openTime: sh.open_time ? sh.open_time.slice(0, 5) : null,
+        closeTime: sh.close_time ? sh.close_time.slice(0, 5) : null,
+      }
+    }
+  }
+
+  return {
+    status: "available",
+    isWorking: true,
+  }
+}
+
+/**
+ * Checks whether an appointment or walk-in conflicts with a shop closure, weekly shop closed day,
+ * kapster leave/exception, or kapster recurring day off / working hours.
+ */
+export function getBookingConflictReason(
+  item: { startsAt: string; endsAt: string; staffId?: number | null },
+  options: {
+    timezone: string
+    shopHours?: ShopHour[] | null
+    shopClosures?: ShopClosure[] | null
+    staffHours?: StaffHour[] | null
+    staffExceptions?: StaffException[] | null
+  }
+): "shop_closed" | "staff_unavailable" | null {
+  const { timezone, shopHours, shopClosures, staffHours, staffExceptions } = options
+  if (!item.startsAt || !item.endsAt) return null
+
+  const dateStr = getDateStringInTimezone(item.startsAt, timezone)
+  const dayOfWeek = getDayOfWeekInTimezone(item.startsAt, timezone)
+  const startParts = getTimeInTimezone(item.startsAt, timezone)
+  const endParts = getTimeInTimezone(item.endsAt, timezone)
+  const startHm = `${String(startParts.hour).padStart(2, "0")}:${String(startParts.minute).padStart(2, "0")}`
+  const endHm = `${String(endParts.hour).padStart(2, "0")}:${String(endParts.minute).padStart(2, "0")}`
+
+  // 1. Check shop closures on dateStr
+  if (shopClosures && shopClosures.length > 0) {
+    const matchingClosures = shopClosures.filter(
+      (c) => c.start_date <= dateStr && c.end_date >= dateStr
+    )
+    if (matchingClosures.length > 0) {
+      const closure = matchingClosures.find((c) => c.is_closed) || matchingClosures[0]
+      if (closure.is_closed) {
+        return "shop_closed"
+      }
+      if (closure.open_time && closure.close_time) {
+        const cOpen = closure.open_time.slice(0, 5)
+        const cClose = closure.close_time.slice(0, 5)
+        if (startHm < cOpen || endHm > cClose) {
+          return "shop_closed"
+        }
+      }
+    } else if (shopHours && shopHours.length > 0) {
+      const sh = shopHours.find((h) => h.day_of_week === dayOfWeek)
+      if (sh && !sh.is_open) {
+        return "shop_closed"
+      }
+    }
+  } else if (shopHours && shopHours.length > 0) {
+    const sh = shopHours.find((h) => h.day_of_week === dayOfWeek)
+    if (sh && !sh.is_open) {
+      return "shop_closed"
+    }
+  }
+
+  // 2. Check kapster availability if staffId is present
+  if (item.staffId) {
+    const staffAvail = getStaffDayAvailability(
+      item.staffId,
+      dateStr,
+      dayOfWeek,
+      staffHours,
+      staffExceptions
+    )
+    if (!staffAvail.isWorking) {
+      return "staff_unavailable"
+    }
+    if (staffAvail.openTime && staffAvail.closeTime) {
+      if (startHm < staffAvail.openTime || endHm > staffAvail.closeTime) {
+        return "staff_unavailable"
+      }
+    }
+  }
+
+  return null
 }
 
 /**

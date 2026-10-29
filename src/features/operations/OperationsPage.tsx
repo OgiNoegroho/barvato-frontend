@@ -9,6 +9,9 @@ import {
   type ApiAppointment,
   type StaffItem,
   type ShopHour,
+  type ShopClosure,
+  type StaffHour,
+  type StaffException,
 } from "../../lib/api"
 import {
   formatRupiah,
@@ -16,11 +19,13 @@ import {
   getDateStringInTimezone,
   getWeekRange,
 } from "../../lib/format"
+import { getBookingConflictReason } from "../../lib/timeline"
 import { Icon } from "../../components/ui/Icon"
 import { OpsToolbar } from "./OpsToolbar"
 import { OpsCalendar } from "./OpsCalendar"
 import { QueuePanel } from "./QueuePanel"
 import { AppointmentDrawer } from "./AppointmentDrawer"
+import { TeamSchedule } from "../team/TeamSchedule"
 import { CheckoutModal } from "../../components/CheckoutModal"
 import { useI18n } from "../../lib/i18n"
 
@@ -40,6 +45,10 @@ export function OperationsPage({
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date())
   const [timezone, setTimezone] = useState("Asia/Jakarta")
   const [shopHours, setShopHours] = useState<ShopHour[]>([])
+  const [shopClosures, setShopClosures] = useState<ShopClosure[]>([])
+  const [staffHours, setStaffHours] = useState<StaffHour[]>([])
+  const [staffExceptions, setStaffExceptions] = useState<StaffException[]>([])
+  const [scheduleStaff, setScheduleStaff] = useState<StaffItem | null>(null)
 
   const [collapsed, setCollapsed] = useState(false)
   const [selectedQueueId, setSelectedQueueId] = useState<number | null>(null)
@@ -115,11 +124,22 @@ export function OperationsPage({
 
   const loadData = useCallback(async () => {
     try {
-      const [queueRes, historyRes, apptsRes, staffRes] = await Promise.all([
+      const [
+        queueRes,
+        historyRes,
+        apptsRes,
+        staffRes,
+        closuresRes,
+        staffHoursRes,
+        staffExcRes,
+      ] = await Promise.all([
         queueApi.list().catch(() => ({ queue: [] })),
         queueApi.history(from, to, 200).catch(() => ({ queue_history: [] })),
         appointmentApi.list(from, to).catch(() => ({ appointments: [] })),
         staffApi.list(true).catch(() => ({ staff: [] })),
+        shopApi.listClosures().catch(() => ({ closures: [] })),
+        staffApi.getAllHours().catch(() => ({ staff_hours: [] })),
+        staffApi.listAllExceptions().catch(() => ({ exceptions: [] })),
       ])
 
       const liveQueue = queueRes.queue || []
@@ -142,6 +162,9 @@ export function OperationsPage({
       )
       setAppointments(apptsRes.appointments || [])
       setStaffList(staffRes.staff || [])
+      setShopClosures(closuresRes.closures || [])
+      setStaffHours(staffHoursRes.staff_hours || [])
+      setStaffExceptions(staffExcRes.exceptions || [])
     } finally {
       setIsLoading(false)
     }
@@ -307,6 +330,45 @@ export function OperationsPage({
     }
   }
 
+  async function handleRescheduleAppointment(
+    id: number,
+    data: { staff_id: number; starts_at: string; override?: boolean }
+  ) {
+    try {
+      const res = await appointmentApi.update(id, data)
+      setDetail(res.appointment)
+      notify(t("calendar.rescheduleSuccess"))
+      loadData()
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === "schedule_conflict" && !data.override) {
+        if (confirm(t("booking.conflictScheduleWarning"))) {
+          await handleRescheduleAppointment(id, { ...data, override: true })
+          return
+        }
+      }
+      throw err
+    }
+  }
+
+  const detailConflictReason = useMemo(() => {
+    if (!detail) return null
+    if (detail.status !== "confirmed" && detail.status !== "checked_in") return null
+    return getBookingConflictReason(
+      {
+        startsAt: detail.starts_at,
+        endsAt: detail.ends_at,
+        staffId: detail.staff_id,
+      },
+      {
+        timezone,
+        shopHours,
+        shopClosures,
+        staffHours,
+        staffExceptions,
+      }
+    )
+  }, [detail, timezone, shopHours, shopClosures, staffHours, staffExceptions])
+
   // Checkout modal flow
   function openQueueCheckout(item: ApiQueueEntry) {
     const assignedBarber = staffList.find((s) => s.id === item.assigned_staff_id)
@@ -390,6 +452,10 @@ export function OperationsPage({
           view={view}
           timezone={timezone}
           shopHours={shopHours}
+          shopClosures={shopClosures}
+          staffHours={staffHours}
+          staffExceptions={staffExceptions}
+          onManageStaffSchedule={(staff) => setScheduleStaff(staff)}
         />
 
         <QueuePanel
@@ -426,7 +492,25 @@ export function OperationsPage({
         onComplete={openAppointmentCheckout}
         onCancel={handleCancelAppointment}
         onNoShow={handleNoShow}
+        conflictReason={detailConflictReason}
+        staffList={staffList}
+        timezone={timezone}
+        onReschedule={handleRescheduleAppointment}
       />
+
+      {scheduleStaff && (
+        <TeamSchedule
+          staff={scheduleStaff}
+          onClose={() => {
+            setScheduleStaff(null)
+            loadData()
+          }}
+          onUpdated={(msg) => {
+            if (msg) notify(msg)
+            loadData()
+          }}
+        />
+      )}
 
       {checkoutTarget && (
         <CheckoutModal

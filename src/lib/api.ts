@@ -262,6 +262,67 @@ export interface ShopHour {
   close_time: string // "21:00:00"
 }
 
+export interface AffectedAppointment {
+  id: number
+  customer_name: string
+  staff_id: number
+  staff_name: string
+  service_name: string
+  starts_at: string
+  ends_at: string
+  status: string
+}
+
+export interface AffectedWalkIn {
+  id: number
+  customer_name: string
+  assigned_staff_id?: number | null
+  assigned_staff_name?: string | null
+  service_name: string
+  status: string
+  arrived_at: string
+  started_at?: string | null
+}
+
+export interface BookingConflictDetails {
+  affected_appointments: AffectedAppointment[]
+  affected_walk_ins: AffectedWalkIn[]
+}
+
+export interface ShopClosure {
+  id: number
+  shop_id: number
+  start_date: string // "YYYY-MM-DD"
+  end_date: string // "YYYY-MM-DD"
+  is_closed: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason: string
+  created_by?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateShopClosureRequest {
+  start_date: string
+  end_date: string
+  is_closed: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason?: string
+  confirm_conflicts?: boolean
+}
+
+export interface UpdateShopClosureRequest {
+  start_date?: string
+  end_date?: string
+  is_closed?: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason?: string
+  confirm_conflicts?: boolean
+}
+
 export const shopApi = {
   get(): Promise<{ shop: ShopDetails }> {
     return apiFetch<{ shop: ShopDetails }>("/api/shop")
@@ -279,6 +340,35 @@ export const shopApi = {
     return apiFetch<{ hours: ShopHour[] }>("/api/shop/hours", {
       method: "PUT",
       body: { hours },
+    })
+  },
+  listClosures(from?: string, to?: string): Promise<{ closures: ShopClosure[] }> {
+    const qs = new URLSearchParams()
+    if (from) qs.set("from", from)
+    if (to) qs.set("to", to)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return apiFetch<{ closures: ShopClosure[] }>(`/api/shop/closures${query}`)
+  },
+  createClosure(
+    data: CreateShopClosureRequest
+  ): Promise<{ closure: ShopClosure; conflicts: BookingConflictDetails }> {
+    return apiFetch<{ closure: ShopClosure; conflicts: BookingConflictDetails }>("/api/shop/closures", {
+      method: "POST",
+      body: data,
+    })
+  },
+  updateClosure(
+    id: number,
+    data: UpdateShopClosureRequest
+  ): Promise<{ closure: ShopClosure; conflicts: BookingConflictDetails }> {
+    return apiFetch<{ closure: ShopClosure; conflicts: BookingConflictDetails }>(`/api/shop/closures/${id}`, {
+      method: "PATCH",
+      body: data,
+    })
+  },
+  deleteClosure(id: number): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(`/api/shop/closures/${id}`, {
+      method: "DELETE",
     })
   },
 }
@@ -324,6 +414,53 @@ export interface StaffScheduleItem {
   is_open: boolean
   open_time: string
   close_time: string
+  source?: "shop_hours" | "shop_closure" | "staff_hours" | "staff_exception"
+  reason?: string
+  shop_closed?: boolean
+}
+
+export interface StaffHour {
+  staff_id: number
+  day_of_week: number // 0=Sunday .. 6=Saturday
+  is_working: boolean
+  open_time: string // "09:00:00"
+  close_time: string // "21:00:00"
+}
+
+export interface StaffException {
+  id: number
+  shop_id: number
+  staff_id: number
+  staff_name?: string
+  start_date: string // "YYYY-MM-DD"
+  end_date: string // "YYYY-MM-DD"
+  is_working: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason: string
+  created_by?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateStaffExceptionRequest {
+  start_date: string
+  end_date: string
+  is_working: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason?: string
+  confirm_conflicts?: boolean
+}
+
+export interface UpdateStaffExceptionRequest {
+  start_date?: string
+  end_date?: string
+  is_working?: boolean
+  open_time?: string | null
+  close_time?: string | null
+  reason?: string
+  confirm_conflicts?: boolean
 }
 
 export interface StaffAvailabilityItem {
@@ -362,6 +499,77 @@ export const staffApi = {
   getSchedule(id: number, date?: string): Promise<{ schedule: StaffScheduleItem }> {
     const qs = date ? `?date=${encodeURIComponent(date)}` : ""
     return apiFetch<{ schedule: StaffScheduleItem }>(`/api/staff/${id}/schedule${qs}`)
+  },
+  getAllHours(): Promise<{ staff_hours: StaffHour[] }> {
+    return apiFetch<{ staff_hours: StaffHour[] }>("/api/staff/hours")
+  },
+  getHours(id: number): Promise<{ hours: StaffHour[]; is_custom: boolean }> {
+    return apiFetch<{ hours: StaffHour[]; is_custom: boolean }>(`/api/staff/${id}/hours`)
+  },
+  updateHours(
+    id: number,
+    hours: StaffHour[],
+    confirmConflicts = false
+  ): Promise<{ hours: StaffHour[]; is_custom: boolean; conflicts: BookingConflictDetails }> {
+    return apiFetch<{ hours: StaffHour[]; is_custom: boolean; conflicts: BookingConflictDetails }>(
+      `/api/staff/${id}/hours`,
+      {
+        method: "PUT",
+        body: { hours, confirm_conflicts: confirmConflicts },
+      }
+    )
+  },
+  listAllExceptions(params?: {
+    from?: string
+    to?: string
+    staff_id?: number
+  }): Promise<{ exceptions: StaffException[] }> {
+    const qs = new URLSearchParams()
+    if (params?.from) qs.set("from", params.from)
+    if (params?.to) qs.set("to", params.to)
+    if (params?.staff_id) qs.set("staff_id", String(params.staff_id))
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return apiFetch<{ exceptions: StaffException[] }>(`/api/staff/exceptions${query}`)
+  },
+  listExceptions(
+    staffId: number,
+    params?: { from?: string; to?: string }
+  ): Promise<{ exceptions: StaffException[] }> {
+    const qs = new URLSearchParams()
+    if (params?.from) qs.set("from", params.from)
+    if (params?.to) qs.set("to", params.to)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return apiFetch<{ exceptions: StaffException[] }>(`/api/staff/${staffId}/exceptions${query}`)
+  },
+  createException(
+    staffId: number,
+    data: CreateStaffExceptionRequest
+  ): Promise<{ exception: StaffException; conflicts: BookingConflictDetails }> {
+    return apiFetch<{ exception: StaffException; conflicts: BookingConflictDetails }>(
+      `/api/staff/${staffId}/exceptions`,
+      {
+        method: "POST",
+        body: data,
+      }
+    )
+  },
+  updateException(
+    staffId: number,
+    excId: number,
+    data: UpdateStaffExceptionRequest
+  ): Promise<{ exception: StaffException; conflicts: BookingConflictDetails }> {
+    return apiFetch<{ exception: StaffException; conflicts: BookingConflictDetails }>(
+      `/api/staff/${staffId}/exceptions/${excId}`,
+      {
+        method: "PATCH",
+        body: data,
+      }
+    )
+  },
+  deleteException(staffId: number, excId: number): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(`/api/staff/${staffId}/exceptions/${excId}`, {
+      method: "DELETE",
+    })
   },
   getAvailability(
     params: {
@@ -550,6 +758,16 @@ export const appointmentApi = {
   create(data: CreateAppointmentRequest): Promise<{ appointment: ApiAppointment }> {
     return apiFetch<{ appointment: ApiAppointment }>("/api/appointments", {
       method: "POST",
+      body: data,
+    })
+  },
+
+  update(
+    id: number,
+    data: { staff_id?: number; service_id?: number; starts_at?: string; override?: boolean }
+  ): Promise<{ appointment: ApiAppointment }> {
+    return apiFetch<{ appointment: ApiAppointment }>(`/api/appointments/${id}`, {
+      method: "PATCH",
       body: data,
     })
   },

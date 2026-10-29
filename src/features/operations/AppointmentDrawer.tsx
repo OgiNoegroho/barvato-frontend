@@ -1,6 +1,13 @@
-import type { ApiAppointment } from "../../lib/api"
+import { useState, useEffect } from "react"
+import type { ApiAppointment, StaffItem } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
-import { formatRupiah, formatTimeOnly } from "../../lib/format"
+import {
+  formatRupiah,
+  formatTimeOnly,
+  getDateStringInTimezone,
+  getTimeInTimezone,
+  getIsoWithTimezone,
+} from "../../lib/format"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
 
 interface AppointmentDrawerProps {
@@ -10,6 +17,13 @@ interface AppointmentDrawerProps {
   onComplete: (appointment: ApiAppointment) => void
   onCancel: (appointment: ApiAppointment) => void
   onNoShow: (appointment: ApiAppointment) => void
+  conflictReason?: "shop_closed" | "staff_unavailable" | null
+  staffList?: StaffItem[]
+  timezone?: string
+  onReschedule?: (
+    id: number,
+    data: { staff_id: number; starts_at: string; override?: boolean }
+  ) => Promise<void>
 }
 
 export function AppointmentDrawer({
@@ -19,8 +33,31 @@ export function AppointmentDrawer({
   onComplete,
   onCancel,
   onNoShow,
+  conflictReason = null,
+  staffList = [],
+  timezone = "Asia/Jakarta",
+  onReschedule,
 }: AppointmentDrawerProps) {
   const { t, language } = useI18n()
+  const [showReschedule, setShowReschedule] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState("")
+  const [rescheduleTime, setRescheduleTime] = useState("10:00")
+  const [rescheduleStaffId, setRescheduleStaffId] = useState<number>(0)
+  const [isSavingReschedule, setIsSavingReschedule] = useState(false)
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (detail) {
+      const dateStr = getDateStringInTimezone(detail.starts_at, timezone)
+      const { hour, minute } = getTimeInTimezone(detail.starts_at, timezone)
+      const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+      setRescheduleDate(dateStr)
+      setRescheduleTime(timeStr)
+      setRescheduleStaffId(detail.staff_id)
+      setRescheduleError(null)
+      setShowReschedule(Boolean(conflictReason))
+    }
+  }, [detail, timezone, conflictReason])
 
   if (!detail) return null
 
@@ -39,6 +76,27 @@ export function AppointmentDrawer({
 
   const statusKey = `status.${detail.status}` as TranslationKey
   const statusLabel = t(statusKey).toUpperCase()
+
+  async function handleSaveReschedule(e: React.FormEvent) {
+    e.preventDefault()
+    if (!detail || !onReschedule) return
+    setIsSavingReschedule(true)
+    setRescheduleError(null)
+    try {
+      const startsAt = getIsoWithTimezone(rescheduleDate, rescheduleTime, timezone)
+      await onReschedule(detail.id, {
+        staff_id: rescheduleStaffId,
+        starts_at: startsAt,
+      })
+      setShowReschedule(false)
+    } catch (err: unknown) {
+      setRescheduleError(
+        err instanceof Error ? err.message : t("common.error")
+      )
+    } finally {
+      setIsSavingReschedule(false)
+    }
+  }
 
   return (
     <aside className="detail-drawer">
@@ -60,10 +118,35 @@ export function AppointmentDrawer({
 
       <div className="detail-status">
         <Badge tone={tone}>{statusLabel}</Badge>
+        {conflictReason && (
+          <Badge tone="danger">⚠️ {t("calendar.bookingConflictBadge")}</Badge>
+        )}
         <span>
           {language === "id" ? `Reservasi #${detail.id}` : `Booking #${detail.id}`}
         </span>
       </div>
+
+      {conflictReason && (isConfirmed || isCheckedIn) && (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "10px 12px",
+            borderRadius: "4px",
+            background: "rgba(207, 60, 60, 0.1)",
+            border: "1px solid rgba(207, 60, 60, 0.35)",
+            color: "var(--danger)",
+            fontSize: "12px",
+            lineHeight: 1.45,
+          }}
+        >
+          ⚠️{" "}
+          <strong>
+            {conflictReason === "shop_closed"
+              ? t("calendar.bookingConflictClosure")
+              : t("calendar.bookingConflictStaff")}
+          </strong>
+        </div>
+      )}
 
       <dl>
         <div>
@@ -73,7 +156,8 @@ export function AppointmentDrawer({
         <div>
           <dt>{t("appointments.colTime")}</dt>
           <dd>
-            {formatTimeOnly(detail.starts_at)} – {formatTimeOnly(detail.ends_at)}
+            {formatTimeOnly(detail.starts_at, timezone)} –{" "}
+            {formatTimeOnly(detail.ends_at, timezone)}
           </dd>
         </div>
         <div>
@@ -92,7 +176,111 @@ export function AppointmentDrawer({
         )}
       </dl>
 
-      <div style={{ marginTop: "24px" }}>
+      {(isConfirmed || isCheckedIn) && onReschedule && (
+        <div style={{ marginTop: "16px" }}>
+          {!showReschedule ? (
+            <button
+              type="button"
+              className="filter-button"
+              style={{ width: "100%", justifyContent: "center" }}
+              onClick={() => setShowReschedule(true)}
+            >
+              {t("calendar.rescheduleAppointment")}
+            </button>
+          ) : (
+            <form
+              onSubmit={handleSaveReschedule}
+              style={{
+                padding: "12px",
+                borderRadius: "4px",
+                background: "var(--paper-2)",
+                border: "1px solid var(--line)",
+              }}
+            >
+              <strong style={{ display: "block", fontSize: "12px", marginBottom: "10px" }}>
+                {t("calendar.rescheduleTitle")}
+              </strong>
+              {rescheduleError && (
+                <div
+                  style={{
+                    color: "var(--danger)",
+                    fontSize: "11px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  ⚠️ {rescheduleError}
+                </div>
+              )}
+              <div style={{ display: "grid", gap: "8px" }}>
+                <label style={{ fontSize: "11px" }}>
+                  {t("calendar.rescheduleDate")}
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    required
+                    style={{ width: "100%", marginTop: "4px" }}
+                  />
+                </label>
+                <label style={{ fontSize: "11px" }}>
+                  {t("calendar.rescheduleTime")}
+                  <input
+                    type="time"
+                    value={rescheduleTime}
+                    onChange={(e) => setRescheduleTime(e.target.value)}
+                    required
+                    style={{ width: "100%", marginTop: "4px" }}
+                  />
+                </label>
+                {staffList.length > 0 && (
+                  <label style={{ fontSize: "11px" }}>
+                    {t("calendar.rescheduleBarber")}
+                    <select
+                      value={rescheduleStaffId}
+                      onChange={(e) => setRescheduleStaffId(Number(e.target.value))}
+                      style={{ width: "100%", marginTop: "4px" }}
+                    >
+                      {staffList.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  justifyContent: "flex-end",
+                  marginTop: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() => setShowReschedule(false)}
+                  disabled={isSavingReschedule}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={isSavingReschedule}
+                >
+                  {isSavingReschedule
+                    ? t("common.saving")
+                    : t("calendar.saveReschedule")}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: "20px" }}>
         {isConfirmed && (
           <button
             className="primary-button wide-detail"
