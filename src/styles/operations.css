@@ -638,8 +638,30 @@
   border-left: 1px solid #ada79b;
   padding: 24px;
   box-shadow: -18px 0 45px #1d211f18;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.detail-drawer .modal-head,
+.detail-drawer .detail-status {
+  flex: none;
+}
+.detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: anywhere;
+}
+.detail-footer {
+  flex: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .detail-drawer h2 {
+  overflow-wrap: anywhere;
   font: 30px var(--serif);
   margin: 6px 0 0;
 }

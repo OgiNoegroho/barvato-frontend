@@ -59,6 +59,16 @@ export function AppointmentDrawer({
     }
   }, [detail, timezone, conflictReason])
 
+  const isOpen = Boolean(detail)
+  useEffect(() => {
+    if (!isOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [isOpen])
+
   if (!detail) return null
 
   const isConfirmed = detail.status === "confirmed"
@@ -126,6 +136,7 @@ export function AppointmentDrawer({
         </span>
       </div>
 
+      <div className="detail-body">
       {conflictReason && (isConfirmed || isCheckedIn) && (
         <div
           style={{
@@ -279,8 +290,9 @@ export function AppointmentDrawer({
           )}
         </div>
       )}
+      </div>
 
-      <div style={{ marginTop: "20px" }}>
+      <div className="detail-footer">
         {isConfirmed && (
           <button
             className="primary-button wide-detail"
