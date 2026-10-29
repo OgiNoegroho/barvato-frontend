@@ -11,6 +11,7 @@ import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
 import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, getInitials } from "../../lib/format"
+import { useI18n } from "../../lib/i18n"
 
 interface FinancePeopleProps {
   type: "commission" | "payout"
@@ -18,6 +19,7 @@ interface FinancePeopleProps {
 
 export function FinancePeople({ type }: FinancePeopleProps) {
   const isSummary = type === "commission"
+  const { t, language } = useI18n()
 
   // Date period state (defaults to current month)
   const [periodStart, setPeriodStart] = useState(() => {
@@ -76,14 +78,20 @@ export function FinancePeople({ type }: FinancePeopleProps) {
     // Strip thousands separators (. or ,)
     numStr = numStr.replace(/[.,]/g, "")
     if (!/^\d+$/.test(numStr)) {
-      return { valid: false as const, error: "Please enter a valid numeric amount." }
+      return {
+        valid: false as const,
+        error: language === "id" ? "Masukkan nominal angka yang valid." : "Please enter a valid numeric amount.",
+      }
     }
     const val = parseInt(numStr, 10)
     if (isNaN(val) || val <= 0) {
-      return { valid: false as const, error: "Payout amount must be greater than zero." }
+      return {
+        valid: false as const,
+        error: language === "id" ? "Nominal pencairan harus lebih besar dari nol." : "Payout amount must be greater than zero.",
+      }
     }
     return { valid: true as const, amount: val }
-  }, [amountInput])
+  }, [amountInput, language])
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
@@ -188,21 +196,23 @@ export function FinancePeople({ type }: FinancePeopleProps) {
     if (isSubmittingPayout || !modalStaffId) return
 
     if (!amountInput.trim()) {
-      setPayoutError("Please enter a payout disbursement amount.")
+      setPayoutError(language === "id" ? "Harap masukkan nominal pencairan." : "Please enter a payout disbursement amount.")
       return
     }
 
     if (!parsedAmountResult || !parsedAmountResult.valid) {
-      setPayoutError(parsedAmountResult?.error || "Invalid payout amount.")
+      setPayoutError(parsedAmountResult?.error || (language === "id" ? "Nominal pencairan tidak valid." : "Invalid payout amount."))
       return
     }
 
     const numericAmount = parsedAmountResult.amount
     if (staffBalanceInfo && numericAmount > staffBalanceInfo.balance) {
       setPayoutError(
-        `Payout amount (${formatRupiah(numericAmount)}) cannot exceed outstanding balance (${formatRupiah(
-          staffBalanceInfo.balance
-        )}).`
+        language === "id"
+          ? `Nominal pencairan (${formatRupiah(numericAmount)}) tidak boleh melebihi sisa saldo (${formatRupiah(staffBalanceInfo.balance)}).`
+          : `Payout amount (${formatRupiah(numericAmount)}) cannot exceed outstanding balance (${formatRupiah(
+              staffBalanceInfo.balance
+            )}).`
       )
       return
     }
@@ -220,7 +230,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
         reference_number: modalRefNumber.trim() || undefined,
         note: modalNote.trim() || undefined,
       })
-      showToast("Payout disbursement recorded successfully")
+      showToast(t("finance.disburseSuccess"))
       setIsPayoutModalOpen(false)
       loadData()
     } catch (err: unknown) {
@@ -229,7 +239,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
       } else if (err instanceof Error) {
         setPayoutError(err.message)
       } else {
-        setPayoutError("Network error disbursing payout.")
+        setPayoutError(language === "id" ? "Kesalahan jaringan saat mencatat pencairan." : "Network error disbursing payout.")
       }
     } finally {
       setIsSubmittingPayout(false)
@@ -237,14 +247,14 @@ export function FinancePeople({ type }: FinancePeopleProps) {
   }
 
   const handleVoidPayout = async (payoutId: number) => {
-    if (!confirm("Are you sure you want to void this payout?")) return
+    if (!confirm(t("finance.confirmVoid"))) return
 
     try {
       await payrollApi.voidPayout(payoutId, "Voided by shop manager")
-      showToast("Payout voided successfully")
+      showToast(t("finance.voidSuccess"))
       loadData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to void payout"
+      const msg = err instanceof Error ? err.message : (language === "id" ? "Gagal membatalkan pencairan" : "Failed to void payout")
       alert(msg)
     }
   }
@@ -258,11 +268,11 @@ export function FinancePeople({ type }: FinancePeopleProps) {
   const formatModelBadge = (m: "commission" | "salary" | "hybrid") => {
     switch (m) {
       case "commission":
-        return <Badge tone="neutral">Commission</Badge>
+        return <Badge tone="neutral">{language === "id" ? "Hanya Komisi" : "Commission"}</Badge>
       case "salary":
-        return <Badge tone="info">Salary</Badge>
+        return <Badge tone="info">{language === "id" ? "Gaji Pokok" : "Salary"}</Badge>
       case "hybrid":
-        return <Badge tone="success">Hybrid</Badge>
+        return <Badge tone="success">{language === "id" ? "Gaji + Komisi" : "Hybrid"}</Badge>
     }
   }
 
@@ -271,7 +281,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
       {/* Pay Period & Top Action Bar */}
       <div className="pay-period" style={{ flexWrap: "wrap", gap: "16px" }}>
         <span>
-          <small>{isSummary ? "PAYROLL PERIOD RANGE" : "ALL RECORDED PAYOUTS"}</small>
+          <small>{isSummary ? t("finance.periodRange") : t("finance.allPayouts")}</small>
           {isSummary ? (
             <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
               <input
@@ -285,7 +295,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   background: "var(--white)",
                 }}
               />
-              <span style={{ fontSize: "11px", color: "var(--muted)" }}>to</span>
+              <span style={{ fontSize: "11px", color: "var(--muted)" }}>{t("finance.to")}</span>
               <input
                 type="date"
                 value={periodEnd}
@@ -300,7 +310,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
             </div>
           ) : (
             <strong>
-              {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              {new Date().toLocaleDateString(language === "id" ? "id-ID" : "en-US", { month: "long", year: "numeric" })}
             </strong>
           )}
         </span>
@@ -308,15 +318,15 @@ export function FinancePeople({ type }: FinancePeopleProps) {
         {isSummary ? (
           <>
             <span>
-              <small>TOTAL GROSS ACCRUED</small>
+              <small>{t("finance.totalGross")}</small>
               <strong>{formatRupiah(totalGrossOwed)}</strong>
             </span>
             <span>
-              <small>TOTAL PAID OUT</small>
+              <small>{t("finance.totalPaidOut")}</small>
               <strong>{formatRupiah(totalPaidSum)}</strong>
             </span>
             <span>
-              <small>OUTSTANDING BALANCE</small>
+              <small>{t("finance.outstandingBalance")}</small>
               <strong style={{ color: totalOutstanding > 0 ? "var(--forest, #2e7d32)" : "var(--ink)" }}>
                 {formatRupiah(totalOutstanding)}
               </strong>
@@ -324,7 +334,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
           </>
         ) : (
           <span>
-            <small>CUMULATIVE DISBURSED</small>
+            <small>{t("finance.cumulativeDisbursed")}</small>
             <strong>{formatRupiah(cumulativePayouts)}</strong>
           </span>
         )}
@@ -335,7 +345,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
           onClick={openNewPayout}
           style={{ marginLeft: "auto" }}
         >
-          + Disburse Payout
+          {t("finance.disbursePayout")}
         </button>
       </div>
 
@@ -353,14 +363,14 @@ export function FinancePeople({ type }: FinancePeopleProps) {
             style={{ marginLeft: "auto", fontSize: "10px" }}
             onClick={loadData}
           >
-            Retry
+            {t("common.retry")}
           </button>
         </div>
       )}
 
       {isLoading ? (
         <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-          Loading {isSummary ? "payroll summary" : "payout history"}...
+          {isSummary ? t("finance.loadingPayroll") : t("finance.loadingPayouts")}
         </div>
       ) : isSummary ? (
         /* Unified Payroll Summary Table */
@@ -373,20 +383,20 @@ export function FinancePeople({ type }: FinancePeopleProps) {
               gap: "8px",
             }}
           >
-            <span>Barber</span>
-            <span>Model</span>
-            <span>Salary</span>
-            <span>Commission</span>
-            <span>Tips</span>
-            <span>Gross Total</span>
-            <span>Total Paid</span>
-            <span>Balance</span>
-            <span style={{ textAlign: "right" }}>Action</span>
+            <span>{t("roles.barber")}</span>
+            <span>{t("team.compensationModel")}</span>
+            <span>{t("finance.colSalary")}</span>
+            <span>{t("team.commissionHeader")}</span>
+            <span>{t("money.colTips")}</span>
+            <span>{t("finance.colGrossTotal")}</span>
+            <span>{t("finance.colTotalPaid")}</span>
+            <span>{t("finance.colBalance")}</span>
+            <span style={{ textAlign: "right" }}>{t("common.actions")}</span>
           </div>
 
           {summaryList.length === 0 ? (
             <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              No staff compensation or activity records found for this period.
+              {t("finance.noRecordsForPeriod")}
             </div>
           ) : (
             summaryList.map((s) => {
@@ -413,7 +423,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   <span>
                     <strong>{formatRupiah(s.commission_earned)}</strong>
                     <small style={{ color: "var(--muted)", display: "block", fontSize: "9px" }}>
-                      {s.completed_jobs} {s.completed_jobs === 1 ? "job" : "jobs"}
+                      {t("finance.jobs", { count: s.completed_jobs })}
                     </small>
                   </span>
                   <span>{formatRupiah(s.tips_earned)}</span>
@@ -428,10 +438,10 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                       className="filter-button mini"
                       style={{ fontSize: "10px", padding: "4px 8px" }}
                       disabled={!hasBalance}
-                      title={hasBalance ? "Disburse payout for this barber" : "No balance outstanding"}
+                      title={hasBalance ? (language === "id" ? "Cairkan komisi/gaji staf ini" : "Disburse payout for this barber") : (language === "id" ? "Tidak ada sisa saldo" : "No balance outstanding")}
                       onClick={() => openPayoutForStaff(s.staff_id)}
                     >
-                      Payout
+                      {t("finance.payoutButton")}
                     </button>
                   </span>
                 </div>
@@ -450,17 +460,17 @@ export function FinancePeople({ type }: FinancePeopleProps) {
               gap: "8px",
             }}
           >
-            <span>Barber</span>
-            <span>Period</span>
-            <span>Method</span>
-            <span>Reference / Note</span>
-            <span>Amount</span>
-            <span style={{ textAlign: "right" }}>Status</span>
+            <span>{t("roles.barber")}</span>
+            <span>{t("finance.colPeriod")}</span>
+            <span>{t("finance.colMethod")}</span>
+            <span>{t("finance.colReferenceNote")}</span>
+            <span>{t("finance.colAmount")}</span>
+            <span style={{ textAlign: "right" }}>{t("common.status")}</span>
           </div>
 
           {payouts.length === 0 ? (
             <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              No payouts have been disbursed yet. Click "+ Disburse Payout" to record a payout.
+              {t("finance.noPayoutsYet")}
             </div>
           ) : (
             payouts.map((p) => {
@@ -470,10 +480,10 @@ export function FinancePeople({ type }: FinancePeopleProps) {
               const endDate = p.period_end ? p.period_end.split("T")[0] : ""
               const methodLabel =
                 p.payment_method === "cash"
-                  ? "Cash"
+                  ? t("payment.cash")
                   : p.payment_method === "transfer"
-                  ? "Transfer"
-                  : "Other"
+                  ? t("payment.transfer")
+                  : (language === "id" ? "Lainnya" : "Other")
 
               return (
                 <div
@@ -495,14 +505,14 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                         {p.reference_number}
                       </code>
                     )}
-                    <span style={{ color: "var(--muted)", fontSize: "10px" }}>{p.note || "Payout"}</span>
+                    <span style={{ color: "var(--muted)", fontSize: "10px" }}>{p.note || (language === "id" ? "Pencairan" : "Payout")}</span>
                   </span>
                   <strong style={{ textDecoration: isVoided ? "line-through" : "none" }}>
                     {formatRupiah(p.amount)}
                   </strong>
                   <span style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
                     <Badge tone={isVoided ? "neutral" : "success"}>
-                      {isVoided ? "Voided" : "Active Payout"}
+                      {isVoided ? t("finance.voided") : t("finance.activePayout")}
                     </Badge>
                     {!isVoided && (
                       <button
@@ -511,7 +521,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                         style={{ fontSize: "9px", padding: "2px 6px" }}
                         onClick={() => handleVoidPayout(p.id)}
                       >
-                        Void
+                        {t("finance.voidButton")}
                       </button>
                     )}
                   </span>
@@ -535,13 +545,13 @@ export function FinancePeople({ type }: FinancePeopleProps) {
           >
             <div className="modal-head">
               <div>
-                <span className="section-index">PAYROLL DISBURSEMENT</span>
-                <h2 id="payout-modal-title">Record Payout</h2>
+                <span className="section-index">{t("finance.periodRange")}</span>
+                <h2 id="payout-modal-title">{t("finance.recordPayoutTitle")}</h2>
               </div>
               <button
                 className="icon-button"
                 onClick={() => setIsPayoutModalOpen(false)}
-                aria-label="Close modal"
+                aria-label={t("common.close")}
               >
                 ×
               </button>
@@ -561,7 +571,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
             <form onSubmit={handleCreatePayout}>
               <div className="form-grid">
                 <label className="full">
-                  Staff Barber
+                  {t("finance.staffBarber")}
                   <select
                     value={modalStaffId}
                     onChange={(e) => {
@@ -574,14 +584,14 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   >
                     {staffList.map((st) => (
                       <option value={st.id} key={st.id}>
-                        {st.name} ({st.contact || "Staff"})
+                        {st.name} ({st.contact || t("roles.staff")})
                       </option>
                     ))}
                   </select>
                 </label>
 
                 <label>
-                  Period Start
+                  {t("finance.periodStart")}
                   <input
                     type="date"
                     value={modalPeriodStart}
@@ -596,7 +606,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                 </label>
 
                 <label>
-                  Period End
+                  {t("finance.periodEnd")}
                   <input
                     type="date"
                     value={modalPeriodEnd}
@@ -621,21 +631,21 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 600 }}>EARNINGS &amp; BALANCE FOR PERIOD</span>
-                    {isCheckingBalance && <span style={{ color: "var(--muted)" }}>Checking...</span>}
+                    <span style={{ color: "var(--muted)", fontWeight: 600 }}>{t("finance.earningsAndBalance")}</span>
+                    {isCheckingBalance && <span style={{ color: "var(--muted)" }}>{t("finance.checkingBalance")}</span>}
                   </div>
                   {staffBalanceInfo ? (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "6px" }}>
                       <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>GROSS EARNINGS</div>
+                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.grossEarnings")}</div>
                         <strong>{formatRupiah(staffBalanceInfo.gross)}</strong>
                       </div>
                       <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>ALREADY PAID</div>
+                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.alreadyPaid")}</div>
                         <strong>{formatRupiah(staffBalanceInfo.paid)}</strong>
                       </div>
                       <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>OUTSTANDING BALANCE</div>
+                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.outstandingBalance")}</div>
                         <strong
                           style={{
                             color: staffBalanceInfo.balance > 0 ? "var(--forest, #2e7d32)" : "var(--ink)",
@@ -646,13 +656,17 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ color: "var(--muted)" }}>Select a barber and date range to inspect balance.</div>
+                    <div style={{ color: "var(--muted)" }}>
+                      {language === "id"
+                        ? "Pilih kapster dan rentang tanggal untuk melihat saldo."
+                        : "Select a barber and date range to inspect balance."}
+                    </div>
                   )}
                 </div>
 
                 <label className="full">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                    <span>Disbursement Amount (Rp)</span>
+                    <span>{t("finance.disbursementAmount")}</span>
                     {staffBalanceInfo && staffBalanceInfo.balance > 0 && (
                       <button
                         type="button"
@@ -664,7 +678,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                           setPayoutError(null)
                         }}
                       >
-                        Set Full Balance ({formatRupiah(staffBalanceInfo.balance)})
+                        {t("finance.setFullBalance", { balance: formatRupiah(staffBalanceInfo.balance) })}
                       </button>
                     )}
                   </div>
@@ -682,7 +696,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   />
                   {parsedAmountResult?.valid && (
                     <small style={{ color: "var(--ink)", fontSize: "11px", marginTop: "4px", display: "block" }}>
-                      Disbursement: <strong>{formatRupiah(parsedAmountResult.amount)}</strong>
+                      {language === "id" ? "Nominal pencairan:" : "Disbursement:"} <strong>{formatRupiah(parsedAmountResult.amount)}</strong>
                     </small>
                   )}
                   {parsedAmountResult && !parsedAmountResult.valid && (
@@ -691,35 +705,35 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                     </small>
                   )}
                   <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                    Enter numbers (e.g. 1500000 or 1.500.000). Supports partial payouts up to the outstanding balance.
+                    {t("finance.amountHelper")}
                   </small>
                 </label>
 
                 <label>
-                  Payment Method
+                  {t("payment.method")}
                   <select
                     value={modalMethod}
                     onChange={(e) => setModalMethod(e.target.value as "transfer" | "cash" | "other")}
                   >
-                    <option value="transfer">Bank Transfer</option>
-                    <option value="cash">Cash</option>
-                    <option value="other">Other</option>
+                    <option value="transfer">{t("payment.transfer")}</option>
+                    <option value="cash">{t("payment.cash")}</option>
+                    <option value="other">{language === "id" ? "Lainnya" : "Other"}</option>
                   </select>
                 </label>
 
                 <label>
-                  Reference Number
+                  {t("finance.referenceNumber")}
                   <input
-                    placeholder="e.g. BCA-987123 / Trx ID"
+                    placeholder={t("finance.referencePlaceholder")}
                     value={modalRefNumber}
                     onChange={(e) => setModalRefNumber(e.target.value)}
                   />
                 </label>
 
                 <label className="full">
-                  Disbursement Note
+                  {t("finance.disbursementNote")}
                   <input
-                    placeholder="e.g. October monthly salary + commission payout"
+                    placeholder={t("finance.notePlaceholder")}
                     value={modalNote}
                     onChange={(e) => setModalNote(e.target.value)}
                   />
@@ -733,14 +747,14 @@ export function FinancePeople({ type }: FinancePeopleProps) {
                   onClick={() => setIsPayoutModalOpen(false)}
                   disabled={isSubmittingPayout}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="primary-button"
                   disabled={isSubmittingPayout || !modalStaffId || !amountInput.trim() || (parsedAmountResult != null && !parsedAmountResult.valid)}
                 >
-                  {isSubmittingPayout ? "Disbursing..." : "Disburse Payout"}
+                  {isSubmittingPayout ? t("finance.disbursing") : t("finance.disbursePayout")}
                 </button>
               </div>
             </form>

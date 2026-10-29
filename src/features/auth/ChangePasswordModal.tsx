@@ -2,9 +2,11 @@ import React, { useState } from "react"
 import { useAuth } from "./AuthContext"
 import { ApiError } from "../../lib/api"
 import { Icon } from "../../components/ui/Icon"
+import { useI18n } from "../../lib/i18n"
 
 export function ChangePasswordModal() {
   const { changePassword, logout } = useAuth()
+  const { t, language } = useI18n()
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -16,17 +18,25 @@ export function ChangePasswordModal() {
     if (isSubmitting) return
 
     if (!currentPassword || !newPassword) {
-      setErrorMessage("Both current password and new password are required.")
+      setErrorMessage(
+        language === "id"
+          ? "Kata sandi saat ini dan kata sandi baru wajib diisi."
+          : "Both current password and new password are required."
+      )
       return
     }
 
     if (newPassword.length < 8) {
-      setErrorMessage("New password must be at least 8 characters long.")
+      setErrorMessage(
+        language === "id"
+          ? "Kata sandi baru minimal 8 karakter."
+          : "New password must be at least 8 characters long."
+      )
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMessage("New passwords do not match.")
+      setErrorMessage(t("auth.passwordMismatch"))
       return
     }
 
@@ -37,9 +47,16 @@ export function ChangePasswordModal() {
       await changePassword(currentPassword, newPassword)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
-        setErrorMessage(err.message || "Failed to update password.")
+        setErrorMessage(
+          err.message ||
+            (language === "id" ? "Gagal memperbarui kata sandi." : "Failed to update password.")
+        )
       } else {
-        setErrorMessage("Network error: Failed to update password.")
+        setErrorMessage(
+          language === "id"
+            ? "Kesalahan jaringan: Gagal memperbarui kata sandi."
+            : "Network error: Failed to update password."
+        )
       }
     } finally {
       setIsSubmitting(false)
@@ -57,13 +74,15 @@ export function ChangePasswordModal() {
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">SECURITY REQUIREMENT</span>
-            <h2 id="change-pw-title">Change Password</h2>
+            <span className="section-index">
+              {language === "id" ? "PERSYARATAN KEAMANAN" : "SECURITY REQUIREMENT"}
+            </span>
+            <h2 id="change-pw-title">{t("auth.mustChangePasswordTitle")}</h2>
           </div>
         </div>
 
         <p style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.5, marginBottom: "20px" }}>
-          You are currently using a temporary password. You must establish a new permanent password to access shop operations.
+          {t("auth.mustChangePasswordSubtitle")}
         </p>
 
         {errorMessage && (
@@ -76,11 +95,11 @@ export function ChangePasswordModal() {
         <form onSubmit={handleSubmit}>
           <div className="form-group" style={{ marginBottom: "14px" }}>
             <label>
-              Current (Temporary) Password
+              {language === "id" ? "Kata Sandi Saat Ini (Sementara)" : "Current (Temporary) Password"}
               <input
                 type="password"
                 autoComplete="current-password"
-                placeholder="Enter current password"
+                placeholder={language === "id" ? "Masukkan kata sandi saat ini" : "Enter current password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 required
@@ -90,11 +109,11 @@ export function ChangePasswordModal() {
 
           <div className="form-group" style={{ marginBottom: "14px" }}>
             <label>
-              New Password (Min. 8 characters)
+              {t("auth.newPasswordLabel")} ({language === "id" ? "Min. 8 karakter" : "Min. 8 characters"})
               <input
                 type="password"
                 autoComplete="new-password"
-                placeholder="Enter your new password"
+                placeholder={language === "id" ? "Masukkan kata sandi baru" : "Enter your new password"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -104,11 +123,11 @@ export function ChangePasswordModal() {
 
           <div className="form-group" style={{ marginBottom: "20px" }}>
             <label>
-              Confirm New Password
+              {t("auth.confirmPasswordLabel")}
               <input
                 type="password"
                 autoComplete="new-password"
-                placeholder="Re-enter your new password"
+                placeholder={language === "id" ? "Ulangi kata sandi baru" : "Re-enter your new password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -123,14 +142,18 @@ export function ChangePasswordModal() {
               onClick={() => void logout()}
               style={{ color: "var(--danger)" }}
             >
-              Sign out instead
+              {language === "id" ? "Keluar saja" : "Sign out instead"}
             </button>
             <button
               type="submit"
               className="primary-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Updating Password..." : "Update Password & Continue"}
+              {isSubmitting
+                ? language === "id"
+                  ? "Menyimpan kata sandi..."
+                  : "Updating Password..."
+                : t("auth.saveNewPasswordButton")}
             </button>
           </div>
         </form>

@@ -16,9 +16,11 @@ import { SettingsPage } from "./features/settings/SettingsPage"
 import { AuthProvider, useAuth } from "./features/auth/AuthContext"
 import { LoginPage } from "./features/auth/LoginPage"
 import { ChangePasswordModal } from "./features/auth/ChangePasswordModal"
+import { I18nProvider, useI18n, type TranslationKey } from "./lib/i18n"
 
 function AppShell() {
   const { user, currentShop, isLoading, isAuthenticated, initError, retrySession } = useAuth()
+  const { t } = useI18n()
   const [page, setPage] = useState<Page>("Overview")
   const [modal, setModal] = useState<
     "appointment" | "walkin" | { kind: "appointment"; initialDate?: string } | null
@@ -33,7 +35,7 @@ function AppShell() {
             B
           </span>
           <h2>BARVATO</h2>
-          <p>Verifying active session with server...</p>
+          <p>{t("auth.verifyingSession")}</p>
           <div className="loading-spinner large" />
         </div>
       </div>
@@ -50,7 +52,7 @@ function AppShell() {
           >
             !
           </span>
-          <h2>Connection Interrupted</h2>
+          <h2>{t("auth.connectionInterrupted")}</h2>
           <p>{initError}</p>
           <button
             type="button"
@@ -58,7 +60,7 @@ function AppShell() {
             onClick={retrySession}
             style={{ width: "100%" }}
           >
-            Retry Connection
+            {t("common.retryConnection")}
           </button>
         </div>
       </div>
@@ -73,19 +75,27 @@ function AppShell() {
     return <ChangePasswordModal />
   }
 
-  const title = page === "Overview" ? `Good day, ${user?.name || "Elias"}.` : page
+  const pageNavKey = `nav.${page.toLowerCase()}` as TranslationKey
+  const translatedPageName = t(pageNavKey)
+
+  const roleText = currentShop?.role
+    ? t(`roles.${currentShop.role}` as TranslationKey).toUpperCase()
+    : t("roles.staff").toUpperCase()
+
+  const title =
+    page === "Overview"
+      ? t("shell.goodDay", { name: user?.name || "Elias" })
+      : translatedPageName
+
   const subtitle =
     page === "Overview"
-      ? `${currentShop?.name || "Shop"} · ${currentShop?.role ? currentShop.role.toUpperCase() : "STAFF"}`
+      ? `${currentShop?.name || "Shop"} · ${roleText}`
       : page === "Operations"
-        ? "Live schedule and walk-in flow · 9 appointments"
-        : `Manage ${page.toLowerCase()} at ${currentShop?.name || "Shop"}`
-
-  function handleSaveBooking() {
-    const kind = modal
-    setModal(null)
-    notify(kind === "walkin" ? "Walk-in added to queue" : "Appointment booked")
-  }
+        ? t("shell.liveScheduleSubtitle")
+        : t("shell.manageSubtitle", {
+            page: translatedPageName.toLowerCase(),
+            shop: currentShop?.name || "Shop",
+          })
 
   return (
     <div className="app-shell">
@@ -98,7 +108,7 @@ function AppShell() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {currentShop?.name ? currentShop.name.toUpperCase() : "SHOP"} / {page.toUpperCase()}
+                {currentShop?.name ? currentShop.name.toUpperCase() : "SHOP"} / {translatedPageName.toUpperCase()}
               </p>
               <h1>{title}</h1>
               <p>{subtitle}</p>
@@ -108,7 +118,7 @@ function AppShell() {
                 className="text-button"
                 onClick={() => setPage("Operations")}
               >
-                Open operations <Icon name="arrow" size={16} />
+                {t("shell.openOperations")} <Icon name="arrow" size={16} />
               </button>
             )}
           </div>
@@ -155,9 +165,11 @@ function AppShell() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <I18nProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </I18nProvider>
   )
 }
 

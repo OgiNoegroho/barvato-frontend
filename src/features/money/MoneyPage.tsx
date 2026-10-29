@@ -13,8 +13,10 @@ import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, formatTimeOnly, getDatePartsInTimezone, getDateStringInTimezone } from "../../lib/format"
 import { FinancePeople } from "./FinancePeople"
 import { DailyClose } from "./DailyClose"
+import { useI18n } from "../../lib/i18n"
 
 export function MoneyPage() {
+  const { t, language } = useI18n()
   const [tab, setTab] = useState("Transactions")
   const [periodPreset, setPeriodPreset] = useState<"Today" | "7 days" | "30 days">("Today")
 
@@ -53,10 +55,12 @@ export function MoneyPage() {
     let periodLabel = ""
     let completedSub = ""
 
+    const activeLocale = language === "id" ? "id-ID" : "en-US"
+
     if (periodPreset === "Today") {
       fromStr = todayStr
       toStr = todayStr
-      const formatter = new Intl.DateTimeFormat("en-US", {
+      const formatter = new Intl.DateTimeFormat(activeLocale, {
         timeZone: timezone,
         weekday: "long",
         month: "short",
@@ -64,32 +68,32 @@ export function MoneyPage() {
         year: "numeric",
       })
       dateHeading = formatter.format(new Date())
-      periodLabel = "TODAY"
-      completedSub = "completed services today"
+      periodLabel = language === "id" ? "HARI INI" : "TODAY"
+      completedSub = language === "id" ? "layanan selesai hari ini" : "completed services today"
     } else if (periodPreset === "7 days") {
       // 7 calendar days total: today and previous 6 calendar days
       const fromUtc = new Date(todayUtc.getTime() - 6 * 24 * 60 * 60 * 1000)
       fromStr = getDateStringInTimezone(fromUtc, "UTC")
       toStr = todayStr
-      const f1 = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(fromUtc)
-      const f2 = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(todayUtc)
+      const f1 = new Intl.DateTimeFormat(activeLocale, { timeZone: "UTC", month: "short", day: "numeric" }).format(fromUtc)
+      const f2 = new Intl.DateTimeFormat(activeLocale, { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(todayUtc)
       dateHeading = `${f1} – ${f2}`
-      periodLabel = "LAST 7 DAYS"
-      completedSub = "completed services in last 7 days"
+      periodLabel = language === "id" ? "7 HARI TERAKHIR" : "LAST 7 DAYS"
+      completedSub = language === "id" ? "layanan selesai dalam 7 hari terakhir" : "completed services in last 7 days"
     } else if (periodPreset === "30 days") {
       // 30 calendar days total: today and previous 29 calendar days
       const fromUtc = new Date(todayUtc.getTime() - 29 * 24 * 60 * 60 * 1000)
       fromStr = getDateStringInTimezone(fromUtc, "UTC")
       toStr = todayStr
-      const f1 = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(fromUtc)
-      const f2 = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(todayUtc)
+      const f1 = new Intl.DateTimeFormat(activeLocale, { timeZone: "UTC", month: "short", day: "numeric" }).format(fromUtc)
+      const f2 = new Intl.DateTimeFormat(activeLocale, { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(todayUtc)
       dateHeading = `${f1} – ${f2}`
-      periodLabel = "LAST 30 DAYS"
-      completedSub = "completed services in last 30 days"
+      periodLabel = language === "id" ? "30 HARI TERAKHIR" : "LAST 30 DAYS"
+      completedSub = language === "id" ? "layanan selesai dalam 30 hari terakhir" : "completed services in last 30 days"
     }
 
     return { fromStr, toStr, dateHeading, periodLabel, completedSub }
-  }, [periodPreset, timezone])
+  }, [periodPreset, timezone, language])
 
   // Request sequence ref to prevent older async responses from overwriting newer results
   const requestSeqRef = useRef(0)
@@ -183,13 +187,17 @@ export function MoneyPage() {
     <div className="money-workspace">
       <div className="money-toolbar">
         <div className="segmented">
-          {(["Today", "7 days", "30 days"] as const).map((x) => (
+          {[
+            { id: "Today" as const, label: language === "id" ? "Hari ini" : "Today" },
+            { id: "7 days" as const, label: language === "id" ? "7 hari" : "7 days" },
+            { id: "30 days" as const, label: language === "id" ? "30 hari" : "30 days" },
+          ].map((x) => (
             <button
-              className={periodPreset === x ? "active" : ""}
-              onClick={() => setPeriodPreset(x)}
-              key={x}
+              className={periodPreset === x.id ? "active" : ""}
+              onClick={() => setPeriodPreset(x.id)}
+              key={x.id}
             >
-              {x}
+              {x.label}
             </button>
           ))}
         </div>
@@ -212,7 +220,7 @@ export function MoneyPage() {
             style={{ marginLeft: "auto", fontSize: "10px" }}
             onClick={loadFinancialData}
           >
-            Retry
+            {t("common.retry")}
           </button>
         </div>
       )}
@@ -220,21 +228,21 @@ export function MoneyPage() {
       {/* Finance Hero Banner */}
       <div className="finance-hero">
         <div>
-          <span className="label">NET REVENUE · {periodLabel}</span>
+          <span className="label">{t("money.netRevenue").toUpperCase()} · {periodLabel}</span>
           <strong>{formatRupiah(overview?.net_revenue ?? 0)}</strong>
           <p>{overview?.completed_jobs ?? overview?.completed_count ?? 0} {completedSub}</p>
         </div>
         <div className="finance-split">
           <span>
-            <small>CASH COLLECTED</small>
+            <small>{t("money.cashCollected").toUpperCase()}</small>
             <strong>{formatRupiah(overview?.net_cash ?? 0)}</strong>
           </span>
           <span>
-            <small>TRANSFER COLLECTED</small>
+            <small>{t("money.cardTransferCollected").toUpperCase()}</small>
             <strong>{formatRupiah(overview?.net_transfer ?? 0)}</strong>
           </span>
           <span>
-            <small>TIPS COLLECTED</small>
+            <small>{language === "id" ? "TIP DITERIMA" : "TIPS COLLECTED"}</small>
             <strong>{formatRupiah(overview?.net_tips ?? 0)}</strong>
           </span>
         </div>
@@ -243,30 +251,38 @@ export function MoneyPage() {
       {/* Metrics Row */}
       <div className="finance-metrics">
         <article>
-          <span className="section-index">PAYMENT METHOD BREAKDOWN</span>
+          <span className="section-index">
+            {language === "id" ? "RINCIAN METODE PEMBAYARAN" : "PAYMENT METHOD BREAKDOWN"}
+          </span>
           <strong>{formatRupiah(overview?.net_revenue ?? 0)}</strong>
           <p>
             <i className="legend card-legend" /> Transfer {formatRupiah(overview?.net_transfer ?? 0)}{" "}
-            <i className="legend cash-legend" /> Cash {formatRupiah(overview?.net_cash ?? 0)}
+            <i className="legend cash-legend" /> {t("payment.cash")} {formatRupiah(overview?.net_cash ?? 0)}
           </p>
         </article>
         <article>
-          <span className="section-index">COMMISSIONS ACCRUED</span>
+          <span className="section-index">
+            {language === "id" ? "AKUMULASI KOMISI" : "COMMISSIONS ACCRUED"}
+          </span>
           <strong>{formatRupiah(commissionsTotal)}</strong>
-          <p>Current active pay cycle</p>
+          <p>{language === "id" ? "Siklus pembayaran aktif saat ini" : "Current active pay cycle"}</p>
         </article>
         <article>
-          <span className="section-index">AVERAGE TICKET</span>
+          <span className="section-index">
+            {language === "id" ? "RATA-RATA TRANSAKSI" : "AVERAGE TICKET"}
+          </span>
           <strong>{formatRupiah(avgTicket)}</strong>
-          <p>Per completed chair</p>
+          <p>{language === "id" ? "Per layanan selesai" : "Per completed chair"}</p>
         </article>
         <article>
-          <span className="section-index">OPERATIONS COUNT</span>
+          <span className="section-index">
+            {language === "id" ? "TOTAL OPERASIONAL" : "OPERATIONS COUNT"}
+          </span>
           <strong>
-            {totalBookings + totalWalkins} total
+            {totalBookings + totalWalkins} {language === "id" ? "total" : "total"}
           </strong>
           <p>
-            {totalBookings} bookings · {totalWalkins} walk-ins
+            {totalBookings} {language === "id" ? "janji temu" : "bookings"} · {totalWalkins} {language === "id" ? "datang langsung" : "walk-ins"}
           </p>
         </article>
       </div>
@@ -274,13 +290,18 @@ export function MoneyPage() {
       {/* Tabs and Detail Section */}
       <section className="data-section finance-detail">
         <div className="finance-tabs">
-          {["Transactions", "Commissions", "Payouts", "Daily close"].map((x) => (
+          {[
+            { id: "Transactions", label: language === "id" ? "Transaksi" : "Transactions" },
+            { id: "Commissions", label: language === "id" ? "Komisi" : "Commissions" },
+            { id: "Payouts", label: language === "id" ? "Pencairan Komisi" : "Payouts" },
+            { id: "Daily close", label: t("money.dailyClose") },
+          ].map((x) => (
             <button
-              className={tab === x ? "active" : ""}
-              onClick={() => setTab(x)}
-              key={x}
+              className={tab === x.id ? "active" : ""}
+              onClick={() => setTab(x.id)}
+              key={x.id}
             >
-              {x}
+              {x.label}
             </button>
           ))}
         </div>
@@ -291,8 +312,12 @@ export function MoneyPage() {
               <div className="search small-search">
                 <Icon name="search" size={15} />
                 <input
-                  placeholder="Search barber, service, or #ID..."
-                  aria-label="Search transactions"
+                  placeholder={
+                    language === "id"
+                      ? "Cari kapster, layanan, atau #ID..."
+                      : "Search barber, service, or #ID..."
+                  }
+                  aria-label={t("common.search")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -302,12 +327,12 @@ export function MoneyPage() {
                 className="filter-button"
                 value={methodFilter}
                 onChange={(e) => setMethodFilter(e.target.value)}
-                aria-label="Filter by payment method"
+                aria-label={t("payment.method")}
                 style={{ height: "34px", padding: "0 10px", outline: "none", cursor: "pointer" }}
               >
-                <option value="all">Method: All</option>
-                <option value="cash">Cash</option>
-                <option value="transfer">Bank Transfer</option>
+                <option value="all">{t("payment.method")}: {t("common.all")}</option>
+                <option value="cash">{t("payment.cash")}</option>
+                <option value="transfer">{t("payment.transfer")}</option>
               </select>
 
               <select
@@ -317,32 +342,36 @@ export function MoneyPage() {
                 aria-label="Filter by transaction type"
                 style={{ height: "34px", padding: "0 10px", outline: "none", cursor: "pointer" }}
               >
-                <option value="all">Type: All</option>
-                <option value="charge">Charge</option>
-                <option value="refund">Refund</option>
+                <option value="all">{language === "id" ? "Tipe: Semua" : "Type: All"}</option>
+                <option value="charge">{language === "id" ? "Penerimaan" : "Charge"}</option>
+                <option value="refund">{language === "id" ? "Pengembalian (Refund)" : "Refund"}</option>
               </select>
             </div>
 
             <div className="money-table">
               <div className="money-tr money-th">
-                <span>Date &amp; time</span>
-                <span>Transaction</span>
-                <span>Service</span>
-                <span>Barber</span>
-                <span>Payment</span>
-                <span>Type</span>
-                <span>Amount</span>
+                <span>{language === "id" ? "Tanggal & Waktu" : "Date & time"}</span>
+                <span>{language === "id" ? "Transaksi" : "Transaction"}</span>
+                <span>{t("appointments.colServices")}</span>
+                <span>{t("appointments.colBarber")}</span>
+                <span>{t("payment.method")}</span>
+                <span>{language === "id" ? "Tipe" : "Type"}</span>
+                <span>{language === "id" ? "Nominal" : "Amount"}</span>
               </div>
 
               {isLoading ? (
                 <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-                  Loading payment ledger from server...
+                  {t("common.loading")}
                 </div>
               ) : filteredPayments.length === 0 ? (
                 <div style={{ padding: "48px 16px", textAlign: "center", borderBottom: "1px solid var(--line)" }}>
                   <p style={{ color: "var(--muted)", fontSize: "12px", margin: "0" }}>
                     {payments.length === 0
-                      ? "No financial transactions recorded yet."
+                      ? language === "id"
+                        ? "Belum ada transaksi keuangan yang tercatat."
+                        : "No financial transactions recorded yet."
+                      : language === "id"
+                      ? "Tidak ada transaksi yang cocok dengan kriteria pencarian."
                       : "No transactions match your search and filter criteria."}
                   </p>
                 </div>

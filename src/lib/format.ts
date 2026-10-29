@@ -29,9 +29,10 @@ export function formatTimeOnly(
 
 export function formatDateHeading(
   date: Date = new Date(),
-  timeZone = "Asia/Jakarta"
+  timeZone = "Asia/Jakarta",
+  locale = "id-ID"
 ): string {
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -41,12 +42,13 @@ export function formatDateHeading(
 
 export function formatDateShort(
   isoOrDate: string | Date | null | undefined,
-  timeZone = "Asia/Jakarta"
+  timeZone = "Asia/Jakarta",
+  locale = "id-ID"
 ): string {
   if (!isoOrDate) return ""
   const date = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate
   if (isNaN(date.getTime())) return ""
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(locale, {
     weekday: "short",
     month: "numeric",
     day: "numeric",
@@ -147,23 +149,24 @@ export function getWeekRange(
 export function formatPeriodLabel(
   date: Date,
   view: string,
-  timeZone = "Asia/Jakarta"
+  timeZone = "Asia/Jakarta",
+  locale = "id-ID"
 ): string {
-  if (view === "Month") {
-    return date.toLocaleDateString("en-US", {
+  if (view === "Month" || view === "Bulan") {
+    return date.toLocaleDateString(locale, {
       month: "long",
       year: "numeric",
       timeZone,
     })
   }
-  if (view === "Week") {
+  if (view === "Week" || view === "Minggu") {
     const { start, end } = getWeekRange(date, timeZone)
-    const startStr = start.toLocaleDateString("en-US", {
+    const startStr = start.toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
       timeZone,
     })
-    const endStr = end.toLocaleDateString("en-US", {
+    const endStr = end.toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
       timeZone,
@@ -171,7 +174,7 @@ export function formatPeriodLabel(
     return `${startStr} – ${endStr}`
   }
   // Default "Day"
-  return formatDateHeading(date, timeZone)
+  return formatDateHeading(date, timeZone, locale)
 }
 
 export function getInitials(name: string | null | undefined): string {
@@ -181,10 +184,18 @@ export function getInitials(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export function formatMinutesAgo(isoString: string | null | undefined): string {
+export function formatMinutesAgo(
+  isoString: string | null | undefined,
+  lang: "id" | "en" = "id"
+): string {
   if (!isoString) return ""
   const arrived = new Date(isoString).getTime()
   const diffMin = Math.max(0, Math.floor((Date.now() - arrived) / (60 * 1000)))
+  if (lang === "id") {
+    if (diffMin === 0) return "Baru tiba"
+    if (diffMin === 1) return "1 mnt lalu"
+    return `${diffMin} mnt lalu`
+  }
   if (diffMin === 0) return "Just arrived"
   if (diffMin === 1) return "1 min ago"
   return `${diffMin} mins ago`

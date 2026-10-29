@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { servicesApi, type ServiceItem, ApiError } from "../../lib/api"
 import { formatRupiah } from "../../lib/format"
 import { Icon } from "../../components/ui/Icon"
+import { useI18n } from "../../lib/i18n"
 
 interface ServiceModalProps {
   service?: ServiceItem | null
@@ -11,6 +12,7 @@ interface ServiceModalProps {
 
 export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps) {
   const isEditing = Boolean(service)
+  const { t, language } = useI18n()
 
   const [name, setName] = useState(service?.name ?? "")
   const [durationMin, setDurationMin] = useState<number>(service?.duration_min ?? 30)
@@ -26,17 +28,25 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
 
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setErrorMessage("Service name is required.")
+      setErrorMessage(language === "id" ? "Nama layanan wajib diisi." : "Service name is required.")
       return
     }
 
     if (durationMin <= 0 || !Number.isInteger(durationMin)) {
-      setErrorMessage("Duration must be a positive number of minutes.")
+      setErrorMessage(
+        language === "id"
+          ? "Durasi harus berupa angka menit positif."
+          : "Duration must be a positive number of minutes."
+      )
       return
     }
 
     if (price < 0 || !Number.isInteger(price)) {
-      setErrorMessage("Price cannot be negative and must be a whole Rupiah amount.")
+      setErrorMessage(
+        language === "id"
+          ? "Harga tidak boleh negatif dan harus berupa nominal bulat."
+          : "Price cannot be negative and must be a whole Rupiah amount."
+      )
       return
     }
 
@@ -51,14 +61,22 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
           price,
           active,
         })
-        onSuccess(`Service "${trimmedName}" updated successfully`)
+        onSuccess(
+          language === "id"
+            ? `Layanan "${trimmedName}" berhasil diperbarui`
+            : `Service "${trimmedName}" updated successfully`
+        )
       } else {
         await servicesApi.create({
           name: trimmedName,
           duration_min: durationMin,
           price,
         })
-        onSuccess(`Service "${trimmedName}" created successfully`)
+        onSuccess(
+          language === "id"
+            ? `Layanan "${trimmedName}" berhasil dibuat`
+            : `Service "${trimmedName}" created successfully`
+        )
       }
       onClose()
     } catch (err: unknown) {
@@ -67,7 +85,11 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
       } else if (err instanceof Error) {
         setErrorMessage(err.message)
       } else {
-        setErrorMessage("An unexpected error occurred while saving the service.")
+        setErrorMessage(
+          language === "id"
+            ? "Terjadi kesalahan saat menyimpan layanan."
+            : "An unexpected error occurred while saving the service."
+        )
       }
     } finally {
       setIsSubmitting(false)
@@ -85,10 +107,18 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">SERVICE CATALOG</span>
-            <h2 id="service-modal-title">{isEditing ? "Edit Service" : "Add New Service"}</h2>
+            <span className="section-index">
+              {language === "id" ? "KATALOG LAYANAN" : "SERVICE CATALOG"}
+            </span>
+            <h2 id="service-modal-title">
+              {isEditing
+                ? language === "id"
+                  ? "Ubah Layanan"
+                  : "Edit Service"
+                : t("settings.addService")}
+            </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close modal">
+          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
             ×
           </button>
         </div>
@@ -107,10 +137,12 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
             <label className="full">
-              Service Name
+              {t("settings.serviceName")}
               <input
                 autoFocus
-                placeholder="e.g. Signature Haircut & Styling"
+                placeholder={
+                  language === "id" ? "cth. Potong Rambut Signature & Styling" : "e.g. Signature Haircut & Styling"
+                }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -118,7 +150,7 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
             </label>
 
             <label>
-              Duration (minutes)
+              {t("settings.serviceDuration")}
               <input
                 type="number"
                 min="5"
@@ -131,7 +163,7 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
             </label>
 
             <label>
-              Price (IDR)
+              {t("settings.servicePrice")}
               <input
                 type="number"
                 min="0"
@@ -141,7 +173,7 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
                 required
               />
               <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                Formatted: <strong>{formatRupiah(price)}</strong>
+                {language === "id" ? "Format" : "Formatted"}: <strong>{formatRupiah(price)}</strong>
               </small>
             </label>
 
@@ -154,7 +186,9 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
                   style={{ width: "16px", height: "16px", cursor: "pointer" }}
                 />
                 <span style={{ fontSize: "11px", fontWeight: 600 }}>
-                  Service is active (visible in booking and walk-in queue)
+                  {language === "id"
+                    ? "Layanan aktif (terlihat dalam reservasi dan antrean walk-in)"
+                    : "Service is active (visible in booking and walk-in queue)"}
                 </span>
               </label>
             )}
@@ -167,14 +201,20 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
               onClick={onClose}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               className="primary-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Create Service"}
+              {isSubmitting
+                ? t("common.saving")
+                : isEditing
+                ? t("common.save")
+                : language === "id"
+                ? "Buat Layanan"
+                : "Create Service"}
             </button>
           </div>
         </form>

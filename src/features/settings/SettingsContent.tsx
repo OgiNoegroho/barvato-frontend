@@ -18,19 +18,20 @@ import { formatRupiah, getInitials } from "../../lib/format"
 import { ServiceModal } from "./ServiceModal"
 import { StaffModal } from "../team/StaffModal"
 import { useAuth } from "../auth/AuthContext"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 
 interface SettingsContentProps {
   section: string
 }
 
 const WEEKDAYS = [
-  { day: 1, label: "Monday" },
-  { day: 2, label: "Tuesday" },
-  { day: 3, label: "Wednesday" },
-  { day: 4, label: "Thursday" },
-  { day: 5, label: "Friday" },
-  { day: 6, label: "Saturday" },
-  { day: 0, label: "Sunday" },
+  { day: 1, labelEn: "Monday", labelId: "Senin" },
+  { day: 2, labelEn: "Tuesday", labelId: "Selasa" },
+  { day: 3, labelEn: "Wednesday", labelId: "Rabu" },
+  { day: 4, labelEn: "Thursday", labelId: "Kamis" },
+  { day: 5, labelEn: "Friday", labelId: "Jumat" },
+  { day: 6, labelEn: "Saturday", labelId: "Sabtu" },
+  { day: 0, labelEn: "Sunday", labelId: "Minggu" },
 ]
 
 function formatTimeForInput(val?: string | null, fallback = "09:00"): string {
@@ -45,34 +46,46 @@ function formatTimeForApi(val?: string | null, fallback = "09:00:00"): string {
 }
 
 export function SettingsContent({ section }: SettingsContentProps) {
+  const { t, language, setLanguage } = useI18n()
+
   const headers: Record<string, [string, string]> = {
     "Shop profile": [
-      "Your shop details",
-      "Information shown on booking confirmations and client receipts.",
+      t("settings.sectionProfile"),
+      language === "id"
+        ? "Informasi yang ditampilkan pada konfirmasi booking dan struk pelanggan."
+        : "Information shown on booking confirmations and client receipts.",
     ],
     "Hours & availability": [
-      "Business hours",
-      "Set regular operating hours and booking availability.",
+      t("settings.businessHoursTitle"),
+      t("settings.businessHoursDesc"),
     ],
     "Services & pricing": [
-      "Service menu",
-      "Manage duration, pricing, and online availability.",
+      t("settings.sectionServices"),
+      language === "id"
+        ? "Kelola durasi, harga, dan ketersediaan layanan online."
+        : "Manage duration, pricing, and online availability.",
     ],
     "Staff & permissions": [
-      "Staff access",
-      "Invite staff and control what each role can access.",
+      t("settings.sectionStaff"),
+      language === "id"
+        ? "Undang staf dan kendalikan hak akses tiap peran."
+        : "Invite staff and control what each role can access.",
     ],
     "Payroll & Compensation": [
-      "Payroll & compensation defaults",
-      "Configure default compensation rules for newly created barbers. Existing barbers retain their agreements.",
+      t("settings.payrollDefaultsTitle"),
+      t("settings.payrollDefaultsDesc"),
     ],
     Notifications: [
-      "Client notifications",
-      "Choose when customers and staff receive updates.",
+      t("settings.sectionNotifications"),
+      language === "id"
+        ? "Pilih kapan pelanggan dan staf menerima pembaruan."
+        : "Choose when customers and staff receive updates.",
     ],
     Billing: [
-      "Plan and billing",
-      "Manage your subscription, invoices, and payment method.",
+      t("settings.sectionBilling"),
+      language === "id"
+        ? "Kelola paket langganan, faktur, dan metode pembayaran."
+        : "Manage your subscription, invoices, and payment method.",
     ],
   }
 
@@ -362,7 +375,12 @@ export function SettingsContent({ section }: SettingsContentProps) {
         const openVal = formatTimeForInput(h.open_time)
         const closeVal = formatTimeForInput(h.close_time)
         if (openVal >= closeVal) {
-          setHoursError(`Closing time must be after opening time for ${wd.label} (${openVal} - ${closeVal}).`)
+          const dayName = language === "id" ? wd.labelId : wd.labelEn
+          setHoursError(
+            language === "id"
+              ? `Jam tutup harus setelah jam buka untuk hari ${dayName} (${openVal} - ${closeVal}).`
+              : `Closing time must be after opening time for ${dayName} (${openVal} - ${closeVal}).`
+          )
           return
         }
       }
@@ -418,6 +436,62 @@ export function SettingsContent({ section }: SettingsContentProps) {
       {/* --- Shop Profile (Activated) --- */}
       {section === "Shop profile" && (
         <div>
+          {/* --- Language Selector --- */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 18px",
+              background: "var(--surface-raised, #faf9f7)",
+              border: "1px solid var(--line)",
+              marginBottom: "20px",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  fontSize: "10px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "var(--muted)",
+                  display: "block",
+                  marginBottom: "2px",
+                }}
+              >
+                {t("settings.languageTitle")}
+              </span>
+              <strong style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>
+                {t("settings.languageSubtitle")}
+              </strong>
+            </div>
+            <div>
+              <select
+                aria-label={t("settings.languageTitle")}
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as "id" | "en")}
+                className="filter-button"
+                style={{
+                  height: "36px",
+                  padding: "0 28px 0 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--ink)",
+                  background: "var(--white)",
+                  border: "1px solid var(--line)",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                <option value="id">Bahasa Indonesia</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+
           {shopError && (
             <div
               className="login-error-alert"
@@ -594,9 +668,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
                   open_time: "09:00:00",
                   close_time: "21:00:00",
                 }
+                const dayLabel = language === "id" ? wd.labelId : wd.labelEn
 
                 return (
-                  <div key={wd.label}>
+                  <div key={wd.day}>
                     <label className="switch">
                       <input
                         type="checkbox"
@@ -605,7 +680,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                       />
                       <i />
                     </label>
-                    <strong>{wd.label}</strong>
+                    <strong>{dayLabel}</strong>
                     {hour.is_open ? (
                       <>
                         <input
@@ -613,7 +688,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                           value={formatTimeForInput(hour.open_time, "09:00")}
                           onChange={(e) => handleTimeChange(wd.day, "open_time", e.target.value)}
                         />
-                        <span>to</span>
+                        <span className="hours-sep">{language === "id" ? "sampai" : "to"}</span>
                         <input
                           type="time"
                           value={formatTimeForInput(hour.close_time, "21:00")}
@@ -621,7 +696,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                         />
                       </>
                     ) : (
-                      <em style={{ gridColumn: "3 / -1" }}>Closed</em>
+                      <em style={{ gridColumn: "3 / -1" }}>{t("settings.dayClosed")}</em>
                     )}
                   </div>
                 )
@@ -655,7 +730,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           {isLoadingServices ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              Loading service catalog from server...
+              {language === "id" ? "Memuat katalog layanan dari server..." : "Loading service catalog from server..."}
             </div>
           ) : services.length === 0 && !servicesError ? (
             <div
@@ -666,10 +741,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
               }}
             >
               <p style={{ color: "var(--muted)", margin: "0 0 12px", fontSize: "12px" }}>
-                No services configured yet for this shop.
+                {t("settings.servicesEmpty")}
               </p>
               <p style={{ color: "var(--muted)", margin: "0 0 16px", fontSize: "10px" }}>
-                Add haircuts, shaves, and grooming services so clients can book appointments and enter the walk-in queue.
+                {t("settings.servicesEmptyDesc")}
               </p>
             </div>
           ) : (
@@ -679,24 +754,28 @@ export function SettingsContent({ section }: SettingsContentProps) {
                   <strong>{srv.name}</strong>
                   <small>
                     {srv.active
-                      ? "Available for online booking & walk-ins"
-                      : "Inactive (hidden from booking and queue)"}
+                      ? language === "id"
+                        ? "Tersedia untuk reservasi online & datang langsung"
+                        : "Available for online booking & walk-ins"
+                      : language === "id"
+                        ? "Nonaktif (tersembunyi dari reservasi dan antrean)"
+                        : "Inactive (hidden from booking and queue)"}
                   </small>
                 </span>
                 <span style={{ fontSize: "11px", color: "var(--muted)", minWidth: "55px" }}>
-                  {srv.duration_min} min
+                  {srv.duration_min} {t("common.minutes")}
                 </span>
                 <strong style={{ fontSize: "11px", minWidth: "90px" }}>
                   {formatRupiah(srv.price)}
                 </strong>
                 <Badge tone={srv.active ? "success" : "neutral"}>
-                  {srv.active ? "Active" : "Inactive"}
+                  {srv.active ? t("common.active") : t("common.inactive")}
                 </Badge>
                 <button
                   type="button"
                   className="icon-button mini"
-                  aria-label={`Edit ${srv.name}`}
-                  title="Edit service details"
+                  aria-label={`${t("common.edit")} ${srv.name}`}
+                  title={language === "id" ? "Ubah detail layanan" : "Edit service details"}
                   onClick={() => {
                     setEditingService(srv)
                     setIsServiceModalOpen(true)
@@ -717,7 +796,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
               setIsServiceModalOpen(true)
             }}
           >
-            <span>+ Add service</span>
+            <span>+ {t("settings.addService")}</span>
             <Icon name="arrow" size={14} />
           </button>
 
@@ -758,19 +837,23 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           {isLoadingStaff ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              Loading staff directory from server...
+              {t("settings.staffLoading")}
             </div>
           ) : staffList.length === 0 && !staffError ? (
             <div style={{ padding: "36px 16px", textAlign: "center", borderBottom: "1px solid var(--line)" }}>
               <p style={{ color: "var(--muted)", margin: "0 0 12px", fontSize: "12px" }}>
-                No staff members configured yet.
+                {t("settings.staffEmpty")}
               </p>
             </div>
           ) : (
             staffList.map((st) => {
               const initials = getInitials(st.name)
               const rateLabel =
-                st.commission_bps != null ? `${st.commission_bps / 100}% commission` : "Standard rate"
+                st.commission_bps != null
+                  ? `${st.commission_bps / 100}% ${language === "id" ? "komisi" : "commission"}`
+                  : language === "id"
+                    ? "Tarif standar"
+                    : "Standard rate"
 
               return (
                 <div key={st.id}>
@@ -778,12 +861,16 @@ export function SettingsContent({ section }: SettingsContentProps) {
                     <span className="avatar small">{initials}</span>
                     <span>
                       <strong>{st.name}</strong>
-                      <small>{st.contact || (st.active ? "Active account" : "Inactive account")}</small>
+                      <small>
+                        {st.contact || (st.active
+                          ? language === "id" ? "Akun aktif" : "Active account"
+                          : language === "id" ? "Akun nonaktif" : "Inactive account")}
+                      </small>
                     </span>
                   </span>
                   <span style={{ fontSize: "11px", color: "var(--muted)" }}>{rateLabel}</span>
                   <Badge tone={st.active ? "success" : "neutral"}>
-                    {st.active ? "Active" : "Inactive"}
+                    {st.active ? t("common.active") : t("common.inactive")}
                   </Badge>
                   <button
                     type="button"
@@ -793,7 +880,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                       setIsStaffModalOpen(true)
                     }}
                   >
-                    Manage
+                    {t("settings.staffManage")}
                   </button>
                 </div>
               )
@@ -809,7 +896,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
               setIsStaffModalOpen(true)
             }}
           >
-            <span>+ Add staff member</span>
+            <span>{t("settings.staffAddMember")}</span>
             <Icon name="arrow" size={14} />
           </button>
 
@@ -826,22 +913,25 @@ export function SettingsContent({ section }: SettingsContentProps) {
         </div>
       )}
 
-      {/* --- Notifications (Unchanged) --- */}
+      {/* --- Notifications (Localized) --- */}
       {section === "Notifications" && (
         <div className="notification-settings">
           {[
             [
-              "Appointment confirmations",
-              "Sent immediately after a new booking",
-            ],
-            ["24-hour reminders", "Reduce no-shows with an automatic reminder"],
-            [
-              "Queue status updates",
-              "Notify walk-ins when their chair is almost ready",
+              t("settings.notifApptConfirm"),
+              t("settings.notifApptConfirmDesc"),
             ],
             [
-              "Daily owner summary",
-              "Revenue and operations summary at closing",
+              t("settings.notifReminder"),
+              t("settings.notifReminderDesc"),
+            ],
+            [
+              t("settings.notifQueue"),
+              t("settings.notifQueueDesc"),
+            ],
+            [
+              t("settings.notifDailySummary"),
+              t("settings.notifDailySummaryDesc"),
             ],
           ].map((x, i) => (
             <label key={x[0]}>
@@ -858,35 +948,41 @@ export function SettingsContent({ section }: SettingsContentProps) {
         </div>
       )}
 
-      {/* --- Billing (Unchanged) --- */}
+      {/* --- Billing (Localized) --- */}
       {section === "Billing" && (
         <div className="billing-panel">
           <div>
-            <Badge tone="success">Active plan</Badge>
-            <h3>Professional</h3>
-            <p>Up to 10 staff members · Unlimited appointments</p>
+            <Badge tone="success">{t("settings.billingActivePlan")}</Badge>
+            <h3>{t("settings.billingPlanName")}</h3>
+            <p>{t("settings.billingPlanDesc")}</p>
             <strong>
-              $79 <small>/ month</small>
+              $79 <small>{t("settings.billingPerMonth")}</small>
             </strong>
-            <button className="filter-button">Change plan</button>
+            <button className="filter-button">{t("settings.billingChangePlan")}</button>
           </div>
           <div>
-            <span className="section-index">PAYMENT METHOD</span>
+            <span className="section-index">{t("settings.billingPaymentMethod")}</span>
             <p>
-              <strong>Visa ending in 4242</strong>
+              <strong>{t("settings.billingCardDesc")}</strong>
               <br />
-              Expires 08/27
+              {t("settings.billingExpires")} 08/27
             </p>
-            <button className="filter-button">Update card</button>
+            <button className="filter-button">{t("settings.billingUpdateCard")}</button>
           </div>
           <div>
-            <span className="section-index">LATEST INVOICE</span>
+            <span className="section-index">{t("settings.billingLatestInvoice")}</span>
             <p>
-              <strong>May 1, 2025</strong>
+              <strong>
+                {new Date(2025, 4, 1).toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </strong>
               <br />
-              $79.00 · Paid
+              $79.00 · {t("settings.billingPaid")}
             </p>
-            <button className="filter-button">Download PDF</button>
+            <button className="filter-button">{t("settings.billingDownloadPdf")}</button>
           </div>
         </div>
       )}
@@ -895,7 +991,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
       {section === "Payroll & Compensation" && (
         <div className="form-grid">
           <label className="full">
-            <span>DEFAULT COMPENSATION MODEL FOR NEW BARBERS</span>
+            <span>{t("settings.payrollModelLabel")}</span>
             <select
               value={payrollSettings.default_model}
               onChange={(e) => {
@@ -906,94 +1002,94 @@ export function SettingsContent({ section }: SettingsContentProps) {
                 setIsPayrollDirty(true)
               }}
             >
-              <option value="commission">Commission per completed service</option>
-              <option value="salary">Fixed monthly salary</option>
-              <option value="hybrid">Base salary plus commission</option>
+              <option value="commission">{t("settings.payrollModelCommission")}</option>
+              <option value="salary">{t("settings.payrollModelSalary")}</option>
+              <option value="hybrid">{t("settings.payrollModelHybrid")}</option>
             </select>
           </label>
 
           {(payrollSettings.default_model === "commission" ||
             payrollSettings.default_model === "hybrid") && (
-            <>
-              <label>
-                <span>COMMISSION CALCULATION METHOD</span>
-                <select
-                  value={payrollSettings.default_commission_type}
-                  onChange={(e) => {
-                    setPayrollSettings({
-                      ...payrollSettings,
-                      default_commission_type: e.target.value as "percentage" | "fixed",
-                    })
-                    setIsPayrollDirty(true)
-                  }}
-                >
-                  <option value="percentage">Percentage of service price (%)</option>
-                  <option value="fixed">Fixed amount per completed service (Rp)</option>
-                </select>
-              </label>
+              <>
+                <label>
+                  <span>{t("settings.payrollMethodLabel")}</span>
+                  <select
+                    value={payrollSettings.default_commission_type}
+                    onChange={(e) => {
+                      setPayrollSettings({
+                        ...payrollSettings,
+                        default_commission_type: e.target.value as "percentage" | "fixed",
+                      })
+                      setIsPayrollDirty(true)
+                    }}
+                  >
+                    <option value="percentage">{t("settings.payrollMethodPercentage")}</option>
+                    <option value="fixed">{t("settings.payrollMethodFixed")}</option>
+                  </select>
+                </label>
 
-              {payrollSettings.default_commission_type === "percentage" ? (
-                <label>
-                  <span>DEFAULT COMMISSION RATE (%)</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.5"
-                    value={payrollSettings.default_commission_rate_bps / 100}
-                    onChange={(e) => {
-                      const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0))
-                      setPayrollSettings({
-                        ...payrollSettings,
-                        default_commission_rate_bps: Math.round(pct * 100),
-                      })
-                      setIsPayrollDirty(true)
-                    }}
-                  />
-                </label>
-              ) : (
-                <label>
-                  <span>FIXED COMMISSION AMOUNT (RP)</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="5000"
-                    value={payrollSettings.default_fixed_commission_amount}
-                    onChange={(e) => {
-                      setPayrollSettings({
-                        ...payrollSettings,
-                        default_fixed_commission_amount: Math.max(0, Number(e.target.value) || 0),
-                      })
-                      setIsPayrollDirty(true)
-                    }}
-                  />
-                </label>
-              )}
-            </>
-          )}
+                {payrollSettings.default_commission_type === "percentage" ? (
+                  <label>
+                    <span>{t("settings.payrollRateLabel")}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={payrollSettings.default_commission_rate_bps / 100}
+                      onChange={(e) => {
+                        const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0))
+                        setPayrollSettings({
+                          ...payrollSettings,
+                          default_commission_rate_bps: Math.round(pct * 100),
+                        })
+                        setIsPayrollDirty(true)
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    <span>{t("settings.payrollFixedLabel")}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      value={payrollSettings.default_fixed_commission_amount}
+                      onChange={(e) => {
+                        setPayrollSettings({
+                          ...payrollSettings,
+                          default_fixed_commission_amount: Math.max(0, Number(e.target.value) || 0),
+                        })
+                        setIsPayrollDirty(true)
+                      }}
+                    />
+                  </label>
+                )}
+              </>
+            )}
 
           {(payrollSettings.default_model === "salary" ||
             payrollSettings.default_model === "hybrid") && (
-            <label className="full">
-              <span>DEFAULT MONTHLY BASE SALARY (RP)</span>
-              <input
-                type="number"
-                min="0"
-                step="100000"
-                value={payrollSettings.default_monthly_salary}
-                onChange={(e) => {
-                  setPayrollSettings({
-                    ...payrollSettings,
-                    default_monthly_salary: Math.max(0, Number(e.target.value) || 0),
-                  })
-                  setIsPayrollDirty(true)
-                }}
-              />
-            </label>
-          )}
+              <label className="full">
+                <span>{t("settings.payrollSalaryLabel")}</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="100000"
+                  value={payrollSettings.default_monthly_salary}
+                  onChange={(e) => {
+                    setPayrollSettings({
+                      ...payrollSettings,
+                      default_monthly_salary: Math.max(0, Number(e.target.value) || 0),
+                    })
+                    setIsPayrollDirty(true)
+                  }}
+                />
+              </label>
+            )}
 
           <label className="full">
-            <span>DEFAULT TIPS POLICY</span>
+            <span>{t("settings.payrollTipsPolicyLabel")}</span>
             <select
               value={payrollSettings.default_tips_policy}
               onChange={(e) => {
@@ -1004,13 +1100,13 @@ export function SettingsContent({ section }: SettingsContentProps) {
                 setIsPayrollDirty(true)
               }}
             >
-              <option value="direct">Direct tips (100% to serving barber)</option>
-              <option value="pooled">Pooled / shop-wide tips</option>
+              <option value="direct">{t("settings.payrollTipsDirect")}</option>
+              <option value="pooled">{t("settings.payrollTipsPooled")}</option>
             </select>
           </label>
 
           <p className="full" style={{ fontSize: "11px", color: "var(--muted)", margin: "4px 0 0" }}>
-            * Note: These settings are used as initial defaults when creating new barbers. Existing barbers' compensation agreements remain untouched.
+            {t("settings.payrollNote")}
           </p>
         </div>
       )}
@@ -1024,10 +1120,16 @@ export function SettingsContent({ section }: SettingsContentProps) {
           disabled={!canManageSettings || isSavingShop || !isShopDirty || !shopName.trim()}
         >
           {isSavingShop
-            ? "Saving shop profile..."
+            ? language === "id"
+              ? "Menyimpan profil toko..."
+              : "Saving shop profile..."
             : isShopDirty
-            ? "Save changes *"
-            : "Profile saved"}
+              ? language === "id"
+                ? "Simpan perubahan *"
+                : "Save changes *"
+              : language === "id"
+                ? "Profil tersimpan"
+                : "Profile saved"}
         </button>
       )}
 
@@ -1039,10 +1141,16 @@ export function SettingsContent({ section }: SettingsContentProps) {
           disabled={isSavingHours || !isHoursDirty}
         >
           {isSavingHours
-            ? "Saving hours..."
+            ? language === "id"
+              ? "Menyimpan jam operasional..."
+              : "Saving hours..."
             : isHoursDirty
-            ? "Save changes *"
-            : "Hours saved"}
+              ? language === "id"
+                ? "Simpan perubahan *"
+                : "Save changes *"
+              : language === "id"
+                ? "Jam operasional tersimpan"
+                : "Hours saved"}
         </button>
       )}
 
@@ -1054,10 +1162,16 @@ export function SettingsContent({ section }: SettingsContentProps) {
           disabled={isSavingPayroll || !isPayrollDirty}
         >
           {isSavingPayroll
-            ? "Saving defaults..."
+            ? language === "id"
+              ? "Menyimpan standar kompensasi..."
+              : "Saving defaults..."
             : isPayrollDirty
-            ? "Save changes *"
-            : "Defaults saved"}
+              ? language === "id"
+                ? "Simpan perubahan *"
+                : "Save changes *"
+              : language === "id"
+                ? "Standar kompensasi tersimpan"
+                : "Defaults saved"}
         </button>
       )}
 
@@ -1066,7 +1180,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
         section !== "Hours & availability" &&
         section !== "Services & pricing" &&
         section !== "Payroll & Compensation" && (
-          <button className="primary-button settings-save">Save changes</button>
+          <button className="primary-button settings-save">{t("common.save")}</button>
         )}
 
       {toastMessage && <Toast message={toastMessage} />}

@@ -2,6 +2,7 @@ import type { Page } from "../../types"
 import { navItems } from "../../data/team"
 import { Icon } from "../ui/Icon"
 import { useAuth } from "../../features/auth/AuthContext"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 
 interface SidebarProps {
   currentPage: Page
@@ -10,6 +11,7 @@ interface SidebarProps {
 
 export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
   const { user, currentShop, logout } = useAuth()
+  const { t } = useI18n()
 
   const initials = user?.name
     ? user.name
@@ -19,6 +21,10 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
         .slice(0, 2)
         .toUpperCase()
     : "B"
+
+  const roleLabel = currentShop?.role
+    ? t(`roles.${currentShop.role}` as TranslationKey).toUpperCase()
+    : t("roles.staff").toUpperCase()
 
   return (
     <aside className="rail">
@@ -31,23 +37,27 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
         <span className="brand-word">BARVATO</span>
       </button>
       <nav className="nav-list" aria-label="Primary navigation">
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={`nav-item ${currentPage === item.label ? "active" : ""}`}
-            onClick={() => onSelectPage(item.label)}
-          >
-            <Icon name={item.icon} />
-            <span>{item.label}</span>
-            {item.label === "Operations" && <b>3</b>}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const navKey = `nav.${item.label.toLowerCase()}` as TranslationKey
+          const label = t(navKey)
+          return (
+            <button
+              key={item.label}
+              className={`nav-item ${currentPage === item.label ? "active" : ""}`}
+              onClick={() => onSelectPage(item.label)}
+            >
+              <Icon name={item.icon} />
+              <span>{label}</span>
+              {item.label === "Operations" && <b>3</b>}
+            </button>
+          )
+        })}
       </nav>
       <div className="rail-foot">
         <div
           className="shop-switch"
           style={{ justifyContent: "space-between", cursor: "pointer" }}
-          title={user ? `Signed in as ${user.name} (${user.email || user.phone}) · Click to view shop profile` : "Click to view shop profile"}
+          title={user ? `${t("common.signedInAs")} ${user.name} (${user.email || user.phone})` : ""}
           onClick={() => onSelectPage("Settings")}
           role="button"
           tabIndex={0}
@@ -65,7 +75,7 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
                 {currentShop?.name || "Shop"}
               </strong>
               <small style={{ display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                {user?.name || "Staff"} · {currentShop?.role ? currentShop.role.toUpperCase() : "STAFF"}
+                {user?.name || t("roles.staff")} · {roleLabel}
               </small>
             </span>
           </div>
@@ -76,10 +86,10 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
               e.stopPropagation()
               void logout()
             }}
-            title="Sign out of your session"
-            aria-label="Sign out"
+            title={t("common.signOut")}
+            aria-label={t("common.signOut")}
           >
-            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.05em" }}>EXIT</span>
+            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.05em" }}>{t("common.exit")}</span>
           </button>
         </div>
       </div>

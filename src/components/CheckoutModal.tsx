@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { formatRupiah } from "../lib/format"
 import { Icon } from "./ui/Icon"
+import { useI18n } from "../lib/i18n"
 
 interface CheckoutModalProps {
   item: {
@@ -16,6 +17,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) {
+  const { t, language } = useI18n()
   const [method, setMethod] = useState<"cash" | "transfer">("cash")
   const [tipInput, setTipInput] = useState<string>("0")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -35,7 +37,12 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
       await onConfirm(method, parsedTip)
       onClose()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to record payment"
+      const message =
+        err instanceof Error
+          ? err.message
+          : language === "id"
+          ? "Gagal mencatat pembayaran"
+          : "Failed to record payment"
       setErrorMessage(message)
     } finally {
       setIsSubmitting(false)
@@ -53,13 +60,15 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">COMPLETE &amp; PAY</span>
-            <h2 id="checkout-title">Complete Service</h2>
+            <span className="section-index">
+              {language === "id" ? "SELESAIKAN & BAYAR" : "COMPLETE & PAY"}
+            </span>
+            <h2 id="checkout-title">{t("checkout.title")}</h2>
           </div>
           <button
             className="icon-button"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t("common.close")}
           >
             ×
           </button>
@@ -81,16 +90,16 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
             marginBottom: "20px",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>Client:</span>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("checkout.billTo")}:</span>
               <strong style={{ fontSize: "13px" }}>{item.customerName}</strong>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>Service:</span>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("appointments.colServices")}:</span>
               <span>{item.serviceName}</span>
             </div>
             {item.staffName && (
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "12px", color: "var(--muted)" }}>Barber:</span>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("appointments.colBarber")}:</span>
                 <span>{item.staffName}</span>
               </div>
             )}
@@ -101,14 +110,16 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
               paddingTop: "10px",
               marginTop: "8px",
             }}>
-              <span style={{ fontSize: "12px", fontWeight: 600 }}>Service Price:</span>
+              <span style={{ fontSize: "12px", fontWeight: 600 }}>
+                {language === "id" ? "Tarif Layanan:" : "Service Price:"}
+              </span>
               <strong style={{ fontSize: "14px", color: "var(--ink)" }}>{formatRupiah(item.price)}</strong>
             </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: "16px" }}>
             <label style={{ display: "block", fontSize: "10px", fontWeight: 700, marginBottom: "8px" }}>
-              Payment Method
+              {t("payment.method")}
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <button
@@ -123,7 +134,7 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
                 }}
                 onClick={() => setMethod("cash")}
               >
-                Cash Drawer
+                {t("payment.cash")}
               </button>
               <button
                 type="button"
@@ -137,14 +148,14 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
                 }}
                 onClick={() => setMethod("transfer")}
               >
-                Transfer / QRIS
+                {language === "id" ? "Transfer Bank / QRIS" : "Transfer / QRIS"}
               </button>
             </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: "20px" }}>
             <label style={{ display: "block", fontSize: "10px", fontWeight: 700, marginBottom: "6px" }}>
-              Barber Tip (Optional)
+              {language === "id" ? "Uang Tip Kapster (Opsional)" : "Barber Tip (Optional)"}
             </label>
             <input
               type="text"
@@ -176,28 +187,34 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
             marginBottom: "20px",
           }}>
             <div>
-              <span style={{ fontSize: "10px", letterSpacing: "0.08em", opacity: 0.8 }}>TOTAL COLLECTED</span>
+              <span style={{ fontSize: "10px", letterSpacing: "0.08em", opacity: 0.8 }}>
+                {language === "id" ? "TOTAL DITERIMA" : "TOTAL COLLECTED"}
+              </span>
               <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--copper-soft)" }}>
                 {formatRupiah(totalAmount)}
               </div>
             </div>
             <span style={{ fontSize: "11px", opacity: 0.7 }}>
-              {method === "cash" ? "Cash" : "Transfer"}
+              {method === "cash" ? t("payment.cash") : t("payment.transfer")}
             </span>
           </div>
 
           <div className="modal-actions">
             <button type="button" className="filter-button" onClick={onClose} disabled={isSubmitting}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" className="primary-button" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <span className="btn-spinner" />
-                  <span>Recording...</span>
+                  <span>{t("common.saving")}</span>
                 </>
               ) : (
-                <span>Complete &amp; Record Payment</span>
+                <span>
+                  {language === "id"
+                    ? "Selesaikan & Catat Pembayaran"
+                    : "Complete & Record Payment"}
+                </span>
               )}
             </button>
           </div>

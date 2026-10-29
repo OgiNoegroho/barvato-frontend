@@ -14,6 +14,7 @@ import {
 } from "../lib/api"
 import { formatRupiah, getIsoWithTimezone } from "../lib/format"
 import { Icon } from "./ui/Icon"
+import { useI18n } from "../lib/i18n"
 
 interface BookingModalProps {
   kind: "appointment" | "walkin"
@@ -34,6 +35,7 @@ export function BookingModal({
   onClose,
   onSuccess,
 }: BookingModalProps) {
+  const { t, language } = useI18n()
   const isWalkin = kind === "walkin"
 
   // Catalog state
@@ -357,10 +359,20 @@ export function BookingModal({
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">{isWalkin ? "WALK-IN QUEUE" : "APPOINTMENT BOOKING"}</span>
-            <h2 id="modal-title">{isWalkin ? "Add Customer to Queue" : "Book New Appointment"}</h2>
+            <span className="section-index">
+              {isWalkin
+                ? language === "id"
+                  ? "ANTREAN WALK-IN"
+                  : "WALK-IN QUEUE"
+                : language === "id"
+                ? "RESERVASI JANJI TEMU"
+                : "APPOINTMENT BOOKING"}
+            </span>
+            <h2 id="modal-title">
+              {isWalkin ? t("booking.titleWalkin") : t("booking.titleAppointment")}
+            </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close modal">
+          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
             ×
           </button>
         </div>
@@ -377,8 +389,10 @@ export function BookingModal({
               color: "#555",
             }}
           >
-            ℹ️ <strong>Historical date selected:</strong> This appointment is scheduled for a past date (
-            {appointmentDate}). Existing overlap and barber availability checks will still apply.
+            ℹ️ <strong>{language === "id" ? "Tanggal lampau dipilih:" : "Historical date selected:"}</strong>{" "}
+            {language === "id"
+              ? `Janji temu ini dijadwalkan untuk tanggal yang telah lewat (${appointmentDate}). Pemeriksaan bentrok jadwal tetap berlaku.`
+              : `This appointment is scheduled for a past date (${appointmentDate}). Existing overlap and barber availability checks will still apply.`}
           </div>
         )}
 
@@ -400,7 +414,7 @@ export function BookingModal({
             }}
           >
             <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--amber)", lineHeight: 1.4 }}>
-              <strong>Overlap Detected:</strong> {conflictPrompt}
+              <strong>{language === "id" ? "Bentrok Terdeteksi:" : "Overlap Detected:"}</strong> {conflictPrompt}
             </p>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button
@@ -408,7 +422,7 @@ export function BookingModal({
                 className="filter-button"
                 onClick={() => setConflictPrompt(null)}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -416,7 +430,7 @@ export function BookingModal({
                 onClick={(e) => handleSubmit(e, true)}
                 disabled={isSubmitting}
               >
-                Override &amp; Book
+                {language === "id" ? "Tetap Jadwalkan (Abaikan)" : "Override & Book"}
               </button>
             </div>
           </div>
@@ -425,10 +439,14 @@ export function BookingModal({
         <form onSubmit={(e) => handleSubmit(e, false)}>
           <div className="form-grid">
             <label className="full">
-              Customer Name
+              {t("booking.clientName")}
               <input
                 autoFocus
-                placeholder="Enter full name (e.g. Budi Santoso)"
+                placeholder={
+                  language === "id"
+                    ? "Masukkan nama lengkap (cth. Budi Santoso)"
+                    : "Enter full name (e.g. Budi Santoso)"
+                }
                 value={customerName}
                 onChange={(e) => {
                   setCustomerName(e.target.value)
@@ -454,7 +472,9 @@ export function BookingModal({
                 }}
               >
                 <small style={{ display: "block", color: "var(--muted)", marginBottom: "4px" }}>
-                  Existing Clients (Click to auto-fill):
+                  {language === "id"
+                    ? "Pelanggan Terdaftar (Klik untuk isi otomatis):"
+                    : "Existing Clients (Click to auto-fill):"}
                 </small>
                 {customers
                   .filter((c) => c.name.toLowerCase().includes(customerName.toLowerCase()))
@@ -482,27 +502,29 @@ export function BookingModal({
             )}
 
             <label className="full">
-              Mobile Number
+              {t("booking.clientPhone")}
               <input
-                placeholder="e.g. 08123456789 or +628123456789"
+                placeholder={language === "id" ? "cth. 08123456789 atau +628123456789" : "e.g. 08123456789 or +628123456789"}
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
               />
             </label>
 
             <label className="full">
-              Service
+              {t("booking.selectServices")}
               <select
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(Number(e.target.value))}
                 required
               >
                 {services.length === 0 ? (
-                  <option value="">No active services configured</option>
+                  <option value="">
+                    {language === "id" ? "Tidak ada layanan aktif" : "No active services configured"}
+                  </option>
                 ) : (
                   services.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.duration_min} min) · {formatRupiah(s.price)}
+                      {s.name} ({s.duration_min} {t("common.minutes")}) · {formatRupiah(s.price)}
                     </option>
                   ))
                 )}
@@ -512,7 +534,7 @@ export function BookingModal({
             {!isWalkin && (
               <>
                 <label>
-                  Appointment Date
+                  {t("booking.date")}
                   <input
                     type="date"
                     value={appointmentDate}
@@ -521,7 +543,7 @@ export function BookingModal({
                   />
                 </label>
                 <label>
-                  Start Time
+                  {t("booking.time")}
                   <input
                     type="time"
                     value={appointmentTime}
@@ -533,7 +555,7 @@ export function BookingModal({
             )}
 
             <label className="full">
-              Assigned Barber
+              {t("booking.barber")}
               <select
                 value={selectedStaffId}
                 onChange={(e) =>
@@ -541,7 +563,9 @@ export function BookingModal({
                 }
                 required={!isWalkin}
               >
-                {isWalkin && <option value="">Next Available / Unassigned</option>}
+                {isWalkin && (
+                  <option value="">{t("booking.anyBarber")}</option>
+                )}
                 {displayedBarbers.map((b) => {
                   const staffId = "staff_id" in b ? b.staff_id : b.id
                   const isAvailable = "available" in b ? b.available : b.active
@@ -549,7 +573,11 @@ export function BookingModal({
                     "display_label" in b
                       ? b.display_label
                       : b.active
-                        ? "Available"
+                        ? language === "id"
+                          ? "Tersedia"
+                          : "Available"
+                        : language === "id"
+                        ? "Tidak Tersedia"
                         : "Unavailable"
                   const isSelected = selectedStaffId === staffId
                   // Barber remains visible, but disabled for a new assignment if unavailable
@@ -573,8 +601,8 @@ export function BookingModal({
                     gap: "6px",
                   }}
                 >
-                  <span className="btn-spinner" style={{ width: "10px", height: "10px" }} /> Checking
-                  barber availability...
+                  <span className="btn-spinner" style={{ width: "10px", height: "10px" }} />{" "}
+                  {language === "id" ? "Memeriksa ketersediaan kapster..." : "Checking barber availability..."}
                 </small>
               )}
               {availabilityError && (
@@ -608,18 +636,18 @@ export function BookingModal({
               onClick={onClose}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" className="primary-button" disabled={isSubmitDisabled}>
               {isSubmitting ? (
                 <>
                   <span className="btn-spinner" />
-                  <span>Saving...</span>
+                  <span>{t("common.saving")}</span>
                 </>
               ) : isWalkin ? (
-                "Add to Queue"
+                t("booking.confirmWalkin")
               ) : (
-                "Confirm Booking"
+                t("booking.confirmBooking")
               )}
             </button>
           </div>

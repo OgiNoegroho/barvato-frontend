@@ -10,6 +10,7 @@ import {
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
 import { getInitials, formatTimeOnly } from "../../lib/format"
+import { useI18n } from "../../lib/i18n"
 
 interface TeamScheduleProps {
   staff: StaffItem
@@ -17,6 +18,7 @@ interface TeamScheduleProps {
 }
 
 export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
+  const { t, language } = useI18n()
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [schedule, setSchedule] = useState<StaffScheduleItem | null>(null)
   const [appointments, setAppointments] = useState<ApiAppointment[]>([])
@@ -92,11 +94,14 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
   const clientMinutes = totalBookedMinutes % 60
   const clientTimeFormatted = clientHours > 0 ? `${clientHours}h ${clientMinutes}m` : `${clientMinutes}m`
 
-  const dateHeading = currentDate.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  })
+  const dateHeading = currentDate.toLocaleDateString(
+    language === "id" ? "id-ID" : "en-US",
+    {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    }
+  )
 
   return (
     <div className="team-schedule-backdrop" onMouseDown={onClose}>
@@ -111,15 +116,15 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
           <div className="schedule-profile">
             <span className="avatar portrait">{initials}</span>
             <div>
-              <span className="section-index">TEAM SCHEDULE</span>
+              <span className="section-index">{t("team.scheduleTab").toUpperCase()}</span>
               <h2 id="team-schedule-title">{staff.name}</h2>
-              <p>{staff.contact || (staff.active ? "Active Barber" : "Inactive Barber")}</p>
+              <p>{staff.contact || (staff.active ? t("common.active") : t("common.inactive"))}</p>
             </div>
           </div>
           <button
             className="icon-button"
             onClick={onClose}
-            aria-label="Close schedule"
+            aria-label={t("common.close")}
           >
             ×
           </button>
@@ -133,10 +138,10 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
             <strong>{dateHeading}</strong>
             <small>
               {isOff
-                ? "Not scheduled / Closed"
+                ? t("team.notScheduled")
                 : schedule
                 ? `${schedule.open_time.slice(0, 5)} – ${schedule.close_time.slice(0, 5)}`
-                : "9:00 AM – 9:00 PM"}
+                : "09:00 – 21:00"}
             </small>
           </div>
           <button onClick={handleNextDay} aria-label="Next day">
@@ -157,29 +162,29 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
 
         {isLoading ? (
           <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-            Loading barber agenda...
+            {t("team.loadingAgenda")}
           </div>
         ) : isOff ? (
           <div className="staff-off-state">
             <span className="avatar portrait">{initials}</span>
-            <h3>Day off</h3>
-            <p>{staff.name} isn’t scheduled to work on this day.</p>
+            <h3>{t("team.dayOff")}</h3>
+            <p>{t("team.dayOffDesc", { name: staff.name })}</p>
           </div>
         ) : (
           <>
             <div className="staff-workload">
               <span>
-                <small>BOOKINGS</small>
+                <small>{t("team.bookingsHeader")}</small>
                 <strong>{activeAppts.length}</strong>
               </span>
               <span>
-                <small>CLIENT TIME</small>
+                <small>{t("team.clientTimeHeader")}</small>
                 <strong>{clientTimeFormatted}</strong>
               </span>
               <span>
-                <small>COMMISSION</small>
+                <small>{t("team.commissionHeader")}</small>
                 <strong>
-                  {staff.commission_bps != null ? `${staff.commission_bps / 100}%` : "Standard"}
+                  {staff.commission_bps != null ? `${staff.commission_bps / 100}%` : t("team.standardRate")}
                 </strong>
               </span>
             </div>
@@ -188,7 +193,7 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
               <div className="agenda-line" />
               {activeAppts.length === 0 ? (
                 <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-                  No appointments scheduled for {staff.name} on this date.
+                  {t("team.noAppointmentsForStaff", { name: staff.name })}
                 </div>
               ) : (
                 activeAppts.map((item) => {
@@ -215,12 +220,12 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
                             }
                           >
                             {isCheckedIn
-                              ? "In service"
+                              ? t("status.in_service")
                               : isCompleted
-                              ? "Completed"
-                              : "Confirmed"}
+                              ? t("status.completed")
+                              : t("status.confirmed")}
                           </Badge>
-                          <span>{item.duration_snapshot_min || 30} min</span>
+                          <span>{item.duration_snapshot_min || 30} {t("common.minutes")}</span>
                         </div>
                         <h3>{item.customer_name}</h3>
                         <p>{item.service_name}</p>
@@ -235,7 +240,7 @@ export function TeamSchedule({ staff, onClose }: TeamScheduleProps) {
 
         <div className="schedule-drawer-actions">
           <button className="filter-button" onClick={onClose}>
-            Close
+            {t("common.close")}
           </button>
         </div>
       </aside>

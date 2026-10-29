@@ -2,6 +2,7 @@ import { useState } from "react"
 import type { ApiQueueEntry, StaffItem } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { formatMinutesAgo, formatRupiah, getInitials, formatTimeOnly } from "../../lib/format"
+import { useI18n } from "../../lib/i18n"
 
 interface QueuePanelProps {
   waiting: ApiQueueEntry[]
@@ -32,15 +33,18 @@ export function QueuePanel({
   onCollapse,
   timezone = "Asia/Jakarta",
 }: QueuePanelProps) {
+  const { t, language } = useI18n()
   const [assigningId, setAssigningId] = useState<number | null>(null)
 
   return (
     <aside className="integrated-queue">
       <div className="queue-head">
         <div>
-          <span className="section-index">LIVE FLOW</span>
+          <span className="section-index">
+            {language === "id" ? "ALUR LANGSUNG" : "LIVE FLOW"}
+          </span>
           <h2>
-            Walk-in Queue <b>{waiting.length}</b>
+            {t("operations.queueTitle")} <b>{waiting.length}</b>
           </h2>
         </div>
         <button
@@ -54,17 +58,18 @@ export function QueuePanel({
 
       <div className="queue-summary">
         <span>
-          <i className="status-dot waiting-dot" /> {waiting.length} waiting
+          <i className="status-dot waiting-dot" /> {waiting.length} {t("operations.waiting")}
         </span>
         <span>
-          <i className="status-dot service-dot" /> {inService.length} in chairs
+          <i className="status-dot service-dot" /> {inService.length}{" "}
+          {language === "id" ? "di kursi" : "in chairs"}
         </span>
       </div>
 
       <div className="ops-queue-list">
         {waiting.length === 0 ? (
           <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-            No walk-in customers currently waiting.
+            {t("operations.noClientsInQueue")}
           </div>
         ) : (
           waiting.map((item, index) => (
@@ -78,16 +83,16 @@ export function QueuePanel({
               </span>
               <div className="grow">
                 <strong>{item.customer_name}</strong>
-                <small>{item.service_name || "Service"}</small>
+                <small>{item.service_name || (language === "id" ? "Layanan" : "Service")}</small>
                 <span className="queue-meta">
                   {item.arrived_at
-                    ? `Arrived ${formatTimeOnly(item.arrived_at, timezone)} (${formatMinutesAgo(item.arrived_at)})`
-                    : formatMinutesAgo(item.arrived_at)}{" "}
+                    ? `${language === "id" ? "Tiba" : "Arrived"} ${formatTimeOnly(item.arrived_at, timezone)} (${formatMinutesAgo(item.arrived_at, language)})`
+                    : formatMinutesAgo(item.arrived_at, language)}{" "}
                   · {formatRupiah(item.price_snapshot)}
                 </span>
               </div>
               <Badge tone={item.assigned_staff_name ? "neutral" : "warning"}>
-                {item.assigned_staff_name || "Unassigned"}
+                {item.assigned_staff_name || (language === "id" ? "Belum Ditugaskan" : "Unassigned")}
               </Badge>
 
               <div className="queue-quick">
@@ -107,7 +112,7 @@ export function QueuePanel({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <option value="" disabled>
-                      Assign barber...
+                      {language === "id" ? "Pilih kapster..." : "Assign barber..."}
                     </option>
                     {staffList.map((st) => {
                       const activeInService = inService.find((s) => s.assigned_staff_id === st.id)
@@ -122,9 +127,15 @@ export function QueuePanel({
                         >
                           {st.name}{" "}
                           {isBusy
-                            ? `— Busy (serving another customer)`
+                            ? language === "id"
+                              ? "— Sibuk (melayani pelanggan lain)"
+                              : "— Busy (serving another customer)"
                             : isUnavailable
-                              ? "— Unavailable"
+                              ? language === "id"
+                                ? "— Tidak tersedia"
+                                : "— Unavailable"
+                              : language === "id"
+                              ? "— Tersedia"
                               : "— Available"}
                         </option>
                       )
@@ -139,7 +150,7 @@ export function QueuePanel({
                           setAssigningId(item.id)
                         }}
                       >
-                        Assign
+                        {language === "id" ? "Tugaskan" : "Assign"}
                       </button>
                     )}
                     <button
@@ -149,14 +160,18 @@ export function QueuePanel({
                         onStart(item)
                       }}
                     >
-                      Start
+                      {t("overview.startService")}
                     </button>
                     <button
-                      title="Cancel walk-in"
+                      title={t("operations.cancelQueue")}
                       style={{ color: "var(--danger)", border: "none", background: "none", padding: "0 4px" }}
                       onClick={(event) => {
                         event.stopPropagation()
-                        if (confirm(`Cancel queue entry for ${item.customer_name}?`)) {
+                        const confirmMsg =
+                          language === "id"
+                            ? `Batalkan antrean untuk ${item.customer_name}?`
+                            : `Cancel queue entry for ${item.customer_name}?`
+                        if (confirm(confirmMsg)) {
                           onCancel(item)
                         }
                       }}
@@ -174,13 +189,15 @@ export function QueuePanel({
       <details className="queue-section" open>
         <summary>
           <span>
-            <i className="status-dot service-dot" /> In service
+            <i className="status-dot service-dot" /> {t("operations.inService")}
           </span>
           <b>{inService.length}</b>
         </summary>
         {inService.length === 0 ? (
           <div style={{ padding: "12px", color: "var(--muted)", fontSize: "11px" }}>
-            No barbers currently serving walk-ins.
+            {language === "id"
+              ? "Tidak ada kapster yang sedang melayani walk-in."
+              : "No barbers currently serving walk-ins."}
           </div>
         ) : (
           inService.map((item) => (
@@ -194,7 +211,8 @@ export function QueuePanel({
                 <span>
                   <strong>{item.customer_name}</strong>
                   <small>
-                    {item.service_name || "Service"} · {item.assigned_staff_name || "Staff"}
+                    {item.service_name || (language === "id" ? "Layanan" : "Service")} ·{" "}
+                    {item.assigned_staff_name || t("roles.staff")}
                   </small>
                 </span>
               </div>
@@ -203,7 +221,7 @@ export function QueuePanel({
                 style={{ fontSize: "10px", minHeight: "26px", padding: "0 8px" }}
                 onClick={() => onComplete(item)}
               >
-                Complete &amp; Pay
+                {language === "id" ? "Selesai & Bayar" : "Complete & Pay"}
               </button>
             </div>
           ))
@@ -213,13 +231,16 @@ export function QueuePanel({
       <details className="queue-section completed-section">
         <summary>
           <span>
-            <i className="status-dot complete-dot" /> Completed today
+            <i className="status-dot complete-dot" />{" "}
+            {language === "id" ? "Selesai hari ini" : "Completed today"}
           </span>
           <b>{completed.length}</b>
         </summary>
         {completed.length === 0 ? (
           <div style={{ padding: "12px", color: "var(--muted)", fontSize: "11px" }}>
-            No completed walk-ins recorded yet today.
+            {language === "id"
+              ? "Belum ada walk-in yang selesai hari ini."
+              : "No completed walk-ins recorded yet today."}
           </div>
         ) : (
           completed.map((item) => (

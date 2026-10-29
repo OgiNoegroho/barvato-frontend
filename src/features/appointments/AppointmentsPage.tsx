@@ -12,8 +12,10 @@ import { BookingModal } from "../../components/BookingModal"
 import { CheckoutModal } from "../../components/CheckoutModal"
 import { AppointmentDrawer } from "../operations/AppointmentDrawer"
 import { getInitials, formatTimeOnly, getDateStringInTimezone } from "../../lib/format"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 
 export function AppointmentsPage() {
+  const { t, language } = useI18n()
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [timezone, setTimezone] = useState("Asia/Jakarta")
   const [appointments, setAppointments] = useState<ApiAppointment[]>([])
@@ -181,11 +183,14 @@ export function AppointmentsPage() {
     loadAppointments()
   }
 
-  const dateFormatted = currentDate.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  })
+  const dateFormatted = currentDate.toLocaleDateString(
+    language === "id" ? "id-ID" : "en-US",
+    {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    }
+  )
 
   const isToday = new Date().toDateString() === currentDate.toDateString()
 
@@ -195,8 +200,8 @@ export function AppointmentsPage() {
         <div className="search small-search">
           <Icon name="search" size={16} />
           <input
-            placeholder="Search client, barber, service..."
-            aria-label="Search appointments"
+            placeholder={t("appointments.searchPlaceholder")}
+            aria-label={t("common.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -206,15 +211,15 @@ export function AppointmentsPage() {
           className="filter-button"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          aria-label="Filter by status"
+          aria-label={t("common.filter")}
           style={{ height: "34px", padding: "0 10px", outline: "none", cursor: "pointer" }}
         >
-          <option value="all">Status: All</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="checked_in">In Chair / Checked In</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="no_show">No Show</option>
+          <option value="all">{t("common.status")}: {t("common.all")}</option>
+          <option value="confirmed">{t("status.confirmed")}</option>
+          <option value="checked_in">{t("status.checked_in")}</option>
+          <option value="completed">{t("status.completed")}</option>
+          <option value="cancelled">{t("status.cancelled")}</option>
+          <option value="no_show">{t("status.no_show")}</option>
         </select>
 
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -234,7 +239,7 @@ export function AppointmentsPage() {
             onClick={handleToday}
             style={{ height: "34px" }}
           >
-            {isToday ? `Today (${dateFormatted})` : dateFormatted}
+            {isToday ? `${t("operations.today")} (${dateFormatted})` : dateFormatted}
           </button>
 
           <button
@@ -254,7 +259,7 @@ export function AppointmentsPage() {
           onClick={() => setIsBookingModalOpen(true)}
           style={{ height: "34px", display: "flex", alignItems: "center", gap: "6px" }}
         >
-          <Icon name="plus" size={14} /> New booking
+          <Icon name="plus" size={14} /> {t("shell.newBooking")}
         </button>
       </div>
 
@@ -272,30 +277,32 @@ export function AppointmentsPage() {
             style={{ marginLeft: "auto", fontSize: "10px" }}
             onClick={loadAppointments}
           >
-            Retry
+            {t("common.retry")}
           </button>
         </div>
       )}
 
       <div className="table">
         <div className="tr th">
-          <span>Client</span>
-          <span>Service</span>
-          <span>Barber</span>
-          <span>Time</span>
-          <span>Status</span>
+          <span>{t("appointments.colClient")}</span>
+          <span>{t("appointments.colServices")}</span>
+          <span>{t("appointments.colBarber")}</span>
+          <span>{t("appointments.colTime")}</span>
+          <span>{t("appointments.colStatus")}</span>
           <span />
         </div>
 
         {isLoading ? (
           <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-            Loading appointments from server...
+            {t("common.loading")}
           </div>
         ) : filteredAppointments.length === 0 ? (
           <div style={{ padding: "48px 16px", textAlign: "center", borderBottom: "1px solid var(--line)" }}>
             <p style={{ color: "var(--muted)", fontSize: "12px", margin: "0 0 14px" }}>
               {appointments.length === 0
-                ? `No appointments scheduled for ${dateFormatted}.`
+                ? `${t("appointments.noAppointments")} (${dateFormatted}).`
+                : language === "id"
+                ? "Tidak ada janji temu yang cocok dengan filter pencarian."
                 : "No appointments match your search and filter criteria."}
             </p>
             {appointments.length === 0 && (
@@ -304,7 +311,7 @@ export function AppointmentsPage() {
                 className="primary-button mini"
                 onClick={() => setIsBookingModalOpen(true)}
               >
-                + Schedule an appointment
+                + {t("shell.newBooking")}
               </button>
             )}
           </div>
@@ -325,12 +332,8 @@ export function AppointmentsPage() {
                       ? "danger"
                       : "warning"
 
-            const statusLabel =
-              a.status === "checked_in"
-                ? "Checked In"
-                : a.status === "no_show"
-                  ? "No Show"
-                  : a.status.charAt(0).toUpperCase() + a.status.slice(1)
+            const statusKey = `status.${a.status}` as TranslationKey
+            const statusLabel = t(statusKey)
 
             return (
               <div

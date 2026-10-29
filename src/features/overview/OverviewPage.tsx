@@ -16,6 +16,7 @@ import {
 } from "../../lib/api"
 import { formatRupiah, formatMinutesAgo, getInitials } from "../../lib/format"
 import { Chair } from "./Chair"
+import { useI18n } from "../../lib/i18n"
 
 interface OverviewPageProps {
   onSchedule: () => void
@@ -28,6 +29,7 @@ export function OverviewPage({
   onQueue,
   onNew,
 }: OverviewPageProps) {
+  const { t, language } = useI18n()
   const [overview, setOverview] = useState<ShopOverview | null>(null)
   const [queue, setQueue] = useState<ApiQueueEntry[]>([])
   const [appointments, setAppointments] = useState<ApiAppointment[]>([])
@@ -67,12 +69,16 @@ export function OverviewPage({
       } else if (err instanceof Error) {
         setErrorMessage(err.message)
       } else {
-        setErrorMessage("Network error loading dashboard.")
+        setErrorMessage(
+          language === "id"
+            ? "Kesalahan jaringan saat memuat dasbor."
+            : "Network error loading dashboard."
+        )
       }
     } finally {
       setIsLoading(false)
     }
-  }, [todayStr])
+  }, [todayStr, language])
 
   useEffect(() => {
     loadDashboardData()
@@ -128,10 +134,16 @@ export function OverviewPage({
         <div className="section-head">
           <div>
             <span className="section-index">01</span>
-            <h2>Today at a glance</h2>
+            <h2>{language === "id" ? "Sekilas Hari Ini" : "Today at a glance"}</h2>
           </div>
           <Badge tone={isShopOpenToday ? "success" : "neutral"}>
-            {isShopOpenToday ? `Open · until ${closingTimeFormatted}` : "Closed today"}
+            {isShopOpenToday
+              ? language === "id"
+                ? `Buka · hingga ${closingTimeFormatted}`
+                : `Open · until ${closingTimeFormatted}`
+              : language === "id"
+              ? "Tutup hari ini"
+              : "Closed today"}
           </Badge>
         </div>
 
@@ -149,60 +161,67 @@ export function OverviewPage({
               style={{ marginLeft: "auto", fontSize: "10px" }}
               onClick={loadDashboardData}
             >
-              Retry
+              {t("common.retry")}
             </button>
           </div>
         )}
 
         <div className="pulse-row">
           <div className="pulse-feature">
-            <span className="label">Net revenue</span>
+            <span className="label">{t("money.netRevenue")}</span>
             <strong>{formatRupiah(overview?.net_revenue ?? 0)}</strong>
             <span style={{ fontSize: "10px", color: "var(--muted)", marginTop: "4px" }}>
-              {overview?.completed_jobs ?? completedAppointments} completed services today
+              {overview?.completed_jobs ?? completedAppointments}{" "}
+              {language === "id" ? "layanan selesai hari ini" : "completed services today"}
             </span>
           </div>
 
           <div className="pulse-stat">
-            <span className="label">Appointments</span>
+            <span className="label">{t("nav.appointments")}</span>
             <strong>
               {completedAppointments}
               <em> / {totalAppointments}</em>
             </strong>
-            <small>{remainingAppointments} remaining today</small>
+            <small>
+              {remainingAppointments} {language === "id" ? "tersisa hari ini" : "remaining today"}
+            </small>
           </div>
 
           <div className="pulse-stat">
-            <span className="label">Walk-ins</span>
+            <span className="label">{t("shell.walkin")}</span>
             <strong>{totalWalkins}</strong>
-            <small>{waitingWalkins} currently waiting</small>
+            <small>
+              {waitingWalkins} {language === "id" ? "sedang menunggu" : "currently waiting"}
+            </small>
           </div>
 
           <div className="pulse-stat">
-            <span className="label">Avg. ticket</span>
+            <span className="label">{language === "id" ? "Rata-rata Transaksi" : "Avg. ticket"}</span>
             <strong>{formatRupiah(avgTicket)}</strong>
-            <small>Per completed chair</small>
+            <small>{language === "id" ? "Per layanan selesai" : "Per completed chair"}</small>
           </div>
         </div>
 
         <div className="section-head schedule-title">
           <div>
             <span className="section-index">02</span>
-            <h2>In the chairs</h2>
+            <h2>{t("overview.liveChairs")}</h2>
           </div>
           <button className="text-button" onClick={onSchedule}>
-            Schedule <Icon name="chevron" size={14} />
+            {t("overview.schedule")} <Icon name="chevron" size={14} />
           </button>
         </div>
 
         <div className="chair-list">
           {isLoading ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              Loading chair status...
+              {t("common.loading")}
             </div>
           ) : staff.length === 0 ? (
             <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--muted)", fontSize: "12px", borderBottom: "1px solid var(--line)" }}>
-              No active barbers in staff roster. Add barbers under Team or Settings.
+              {language === "id"
+                ? "Tidak ada kapster aktif. Tambahkan staf di menu Tim atau Pengaturan."
+                : "No active barbers in staff roster. Add barbers under Team or Settings."}
             </div>
           ) : (
             staff.map((barber) => {
@@ -219,14 +238,17 @@ export function OverviewPage({
               const activeJob = activeWalkIn || activeAppt
               const isFree = !activeJob
 
-              let clientName = "Available"
-              let serviceName = "Ready for walk-in or booking"
+              let clientName = t("overview.chairAvailable")
+              let serviceName =
+                language === "id"
+                  ? "Siap untuk walk-in atau reservasi"
+                  : "Ready for walk-in or booking"
               let progressPct = 0
-              let timeLeft = "Ready"
+              let timeLeft = language === "id" ? "Siap" : "Ready"
 
               if (activeJob) {
                 clientName = activeJob.customer_name
-                serviceName = activeJob.service_name || "Grooming Service"
+                serviceName = activeJob.service_name || (language === "id" ? "Layanan Grooming" : "Grooming Service")
                 const duration = activeJob.duration_snapshot_min || 30
 
                 // Calculate progress
@@ -241,7 +263,7 @@ export function OverviewPage({
                 const elapsedMin = Math.max(0, Math.floor((Date.now() - startMs) / (60 * 1000)))
                 progressPct = Math.min(100, Math.round((elapsedMin / duration) * 100))
                 const remainingMin = Math.max(1, duration - elapsedMin)
-                timeLeft = `${remainingMin} min left`
+                timeLeft = language === "id" ? `${remainingMin} mnt lagi` : `${remainingMin} min left`
               }
 
               return (
@@ -254,7 +276,7 @@ export function OverviewPage({
                   time={timeLeft}
                   progress={progressPct}
                   free={isFree}
-                  role={barber.contact || "Barber"}
+                  role={barber.contact || t("roles.barber")}
                 />
               )
             })
@@ -267,13 +289,13 @@ export function OverviewPage({
           <div className="section-head">
             <div>
               <span className="section-index">03</span>
-              <h2>Walk-in queue</h2>
+              <h2>{t("overview.queue")}</h2>
             </div>
             <button
               className="icon-button mini"
               onClick={onNew}
-              aria-label="Add walk-in"
-              title="Add walk-in customer"
+              aria-label={t("shell.walkin")}
+              title={t("shell.walkin")}
             >
               <Icon name="plus" size={16} />
             </button>
@@ -281,24 +303,24 @@ export function OverviewPage({
 
           <div className="wait-callout">
             <span>
-              <b>{waitingQueue.length}</b> waiting
+              <b>{waitingQueue.length}</b> {t("operations.waiting")}
             </span>
             <span>
-              In chairs <b>{servingQueue.length}</b>
+              {language === "id" ? "Di kursi" : "In chairs"} <b>{servingQueue.length}</b>
             </span>
           </div>
 
           {isLoading ? (
             <div style={{ padding: "24px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              Loading queue...
+              {t("common.loading")}
             </div>
           ) : waitingQueue.length === 0 ? (
             <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              No walk-in clients waiting in queue.
+              {t("overview.emptyQueue")}
             </div>
           ) : (
             waitingQueue.slice(0, 5).map((item, index) => {
-              const waitTime = formatMinutesAgo(item.arrived_at)
+              const waitTime = formatMinutesAgo(item.arrived_at, language)
 
               return (
                 <div className="queue-mini" key={item.id}>
@@ -306,7 +328,7 @@ export function OverviewPage({
                   <span className="avatar">{getInitials(item.customer_name)}</span>
                   <span className="grow">
                     <strong>{item.customer_name}</strong>
-                    <small>{item.service_name || "Haircut"}</small>
+                    <small>{item.service_name || (language === "id" ? "Cukur Rambut" : "Haircut")}</small>
                   </span>
                   <span className="wait">{waitTime}</span>
                 </div>
@@ -315,17 +337,17 @@ export function OverviewPage({
           )}
 
           <button className="wide-button" onClick={onQueue}>
-            Manage queue <Icon name="arrow" size={16} />
+            {language === "id" ? "Kelola antrean" : "Manage queue"} <Icon name="arrow" size={16} />
           </button>
         </section>
 
         <section className="payments-strip">
           <div>
-            <span>Bank Transfer</span>
+            <span>{t("payment.transfer")}</span>
             <strong>{formatRupiah(overview?.net_transfer ?? 0)}</strong>
           </div>
           <div>
-            <span>Cash</span>
+            <span>{t("payment.cash")}</span>
             <strong>{formatRupiah(overview?.net_cash ?? 0)}</strong>
           </div>
           <button

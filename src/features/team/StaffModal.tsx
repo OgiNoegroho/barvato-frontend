@@ -6,6 +6,7 @@ import {
   ApiError,
 } from "../../lib/api"
 import { Icon } from "../../components/ui/Icon"
+import { useI18n } from "../../lib/i18n"
 
 interface StaffModalProps {
   staff?: StaffItem | null
@@ -15,6 +16,7 @@ interface StaffModalProps {
 
 export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
   const isEditing = Boolean(staff)
+  const { t, language } = useI18n()
 
   const [name, setName] = useState(staff?.name ?? "")
   const [contact, setContact] = useState(staff?.contact ?? "")
@@ -118,10 +120,10 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
         >
           <div className="modal-head">
             <div>
-              <span className="section-index">STAFF PROVISIONING</span>
-              <h2 id="staff-success-title">Account Created</h2>
+              <span className="section-index">{t("team.provisioningTitle")}</span>
+              <h2 id="staff-success-title">{t("team.accountCreated")}</h2>
             </div>
-            <button className="icon-button" onClick={onClose} aria-label="Close modal">
+            <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
               ×
             </button>
           </div>
@@ -135,35 +137,34 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
             }}
           >
             <p style={{ margin: "0 0 14px", fontSize: "12px", color: "var(--ink)", lineHeight: 1.5 }}>
-              A new staff account has been provisioned for <strong>{createdResult.staff.name}</strong>.
-              Please securely share these temporary credentials with them:
+              {t("team.credentialsNotice", { name: createdResult.staff.name })}
             </p>
 
             <div style={{ background: "var(--white)", border: "1px solid var(--line)", padding: "12px", fontSize: "12px" }}>
               <div style={{ marginBottom: "6px" }}>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>Login ID:</span>
+                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.loginId")}</span>
                 <strong>{email.trim() || phone.trim()}</strong>
               </div>
               <div style={{ marginBottom: "6px" }}>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>Temp Password:</span>
+                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.tempPassword")}</span>
                 <code style={{ fontSize: "13px", color: "var(--amber)", fontWeight: 700 }}>
                   {createdResult.temporary_password}
                 </code>
               </div>
               <div>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>Assigned Role:</span>
-                <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{role}</span>
+                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.assignedRole")}</span>
+                <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{t(`roles.${role}` as any)}</span>
               </div>
             </div>
 
             <p style={{ margin: "14px 0 0", fontSize: "10px", color: "var(--muted)" }}>
-              The staff member will be required to change their temporary password upon their first login.
+              {t("team.mustChangeNotice")}
             </p>
           </div>
 
           <div className="modal-actions">
             <button type="button" className="primary-button" onClick={onClose}>
-              Done
+              {t("common.close")}
             </button>
           </div>
         </div>
@@ -182,10 +183,18 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">STAFF MANAGEMENT</span>
-            <h2 id="staff-modal-title">{isEditing ? "Edit Staff Member" : "Add Staff Member"}</h2>
+            <span className="section-index">
+              {language === "id" ? "MANAJEMEN STAF" : "STAFF MANAGEMENT"}
+            </span>
+            <h2 id="staff-modal-title">
+              {isEditing
+                ? language === "id"
+                  ? "Ubah Data Staf"
+                  : "Edit Staff Member"
+                : t("team.addStaff")}
+            </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close modal">
+          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
             ×
           </button>
         </div>
@@ -204,10 +213,10 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
             <label className="full">
-              Full Name
+              {t("team.modalName")}
               <input
                 autoFocus
-                placeholder="e.g. Julian Ross"
+                placeholder={language === "id" ? "cth. Budi Pratama" : "e.g. Julian Ross"}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -215,16 +224,16 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
             </label>
 
             <label>
-              Contact (Phone or Email)
+              {language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
               <input
-                placeholder="e.g. 081299990002"
+                placeholder="081299990002"
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
               />
             </label>
 
             <label>
-              Commission Rate (%)
+              {t("team.commissionRate")} (%)
               <input
                 type="number"
                 min="0"
@@ -248,7 +257,9 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
                   style={{ width: "16px", height: "16px", cursor: "pointer" }}
                 />
                 <span style={{ fontSize: "11px", fontWeight: 600 }}>
-                  Staff member is active (can take appointments and queue assignments)
+                  {language === "id"
+                    ? "Staf aktif (dapat menerima janji temu dan penugasan antrean)"
+                    : "Staff member is active (can take appointments and queue assignments)"}
                 </span>
               </label>
             )}
@@ -263,22 +274,24 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
                     style={{ width: "16px", height: "16px", cursor: "pointer" }}
                   />
                   <span style={{ fontSize: "11px", fontWeight: 600 }}>
-                    Create login credentials for this staff member
+                    {language === "id"
+                      ? "Buat akun login untuk anggota staf ini"
+                      : "Create login credentials for this staff member"}
                   </span>
                 </label>
 
                 {createUser && (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "var(--white)", padding: "12px", border: "1px solid var(--line)" }}>
                     <label>
-                      Account Role
+                      {t("team.modalRole")}
                       <select value={role} onChange={(e) => setRole(e.target.value as "barber" | "manager")}>
-                        <option value="barber">Barber</option>
-                        <option value="manager">Manager</option>
+                        <option value="barber">{t("roles.barber")}</option>
+                        <option value="manager">{t("roles.manager")}</option>
                       </select>
                     </label>
 
                     <label>
-                      Login Email
+                      {t("team.modalEmail")}
                       <input
                         type="email"
                         placeholder="barber@example.com"
@@ -288,7 +301,7 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
                     </label>
 
                     <label className="full">
-                      Login Phone (ID format)
+                      {t("team.modalPhone")}
                       <input
                         placeholder="081299990002"
                         value={phone}
@@ -308,14 +321,18 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
               onClick={onClose}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               className="primary-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Add Staff Member"}
+              {isSubmitting
+                ? t("common.saving")
+                : isEditing
+                ? t("common.save")
+                : t("team.addStaff")}
             </button>
           </div>
         </form>

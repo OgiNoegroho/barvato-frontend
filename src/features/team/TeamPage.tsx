@@ -7,8 +7,10 @@ import { getInitials } from "../../lib/format"
 import { TeamSchedule } from "./TeamSchedule"
 import { StaffModal } from "./StaffModal"
 import { BarberCompensationModal } from "./BarberCompensationModal"
+import { useI18n } from "../../lib/i18n"
 
 export function TeamPage() {
+  const { t, language } = useI18n()
   const [staffList, setStaffList] = useState<StaffItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -52,8 +54,8 @@ export function TeamPage() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div>
-          <span className="section-index">STAFF ROSTER</span>
-          <h2 style={{ font: "28px var(--serif)", margin: "4px 0 0" }}>Team Members</h2>
+          <span className="section-index">{t("team.rosterTab").toUpperCase()}</span>
+          <h2 style={{ font: "28px var(--serif)", margin: "4px 0 0" }}>{t("team.title")}</h2>
         </div>
         <button
           type="button"
@@ -63,7 +65,7 @@ export function TeamPage() {
             setIsStaffModalOpen(true)
           }}
         >
-          <Icon name="plus" size={14} /> Add staff member
+          <Icon name="plus" size={14} /> {t("team.addStaff")}
         </button>
       </div>
 
@@ -81,14 +83,14 @@ export function TeamPage() {
             style={{ marginLeft: "auto", fontSize: "10px" }}
             onClick={loadStaff}
           >
-            Retry
+            {t("common.retry")}
           </button>
         </div>
       )}
 
       {isLoading ? (
         <div style={{ padding: "64px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-          Loading team roster from server...
+          {t("common.loading")}
         </div>
       ) : staffList.length === 0 && !errorMessage ? (
         <div
@@ -99,9 +101,13 @@ export function TeamPage() {
             border: "1px solid var(--line)",
           }}
         >
-          <h3 style={{ font: "22px var(--serif)", margin: "0 0 8px" }}>No staff members found</h3>
+          <h3 style={{ font: "22px var(--serif)", margin: "0 0 8px" }}>
+            {language === "id" ? "Belum ada anggota tim" : "No staff members found"}
+          </h3>
           <p style={{ color: "var(--muted)", fontSize: "12px", margin: "0 0 20px" }}>
-            Add your barbers and staff to assign them appointments, walk-in clients, and track commissions.
+            {language === "id"
+              ? "Tambahkan kapster dan staf untuk menugaskan janji temu, walk-in, serta melacak komisi."
+              : "Add your barbers and staff to assign them appointments, walk-in clients, and track commissions."}
           </p>
           <button
             type="button"
@@ -111,7 +117,7 @@ export function TeamPage() {
               setIsStaffModalOpen(true)
             }}
           >
-            + Add first staff member
+            + {t("team.addStaff")}
           </button>
         </div>
       ) : (
@@ -120,7 +126,9 @@ export function TeamPage() {
             const initials = getInitials(st.name)
             const commissionLabel =
               st.commission_bps != null
-                ? `${st.commission_bps / 100}% commission`
+                ? `${st.commission_bps / 100}% ${language === "id" ? "komisi" : "commission"}`
+                : language === "id"
+                ? "Tarif standar"
                 : "Standard rate"
 
             return (
@@ -129,13 +137,13 @@ export function TeamPage() {
                   <span className={`avatar portrait p${i % 4}`}>{initials}</span>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                     <Badge tone={st.active ? "success" : "neutral"}>
-                      {st.active ? "Active" : "Inactive"}
+                      {st.active ? t("common.active") : t("common.inactive")}
                     </Badge>
                     <button
                       type="button"
                       className="icon-button mini"
-                      aria-label={`Edit ${st.name}`}
-                      title="Edit staff details"
+                      aria-label={`${t("common.edit")} ${st.name}`}
+                      title={t("team.editStaff")}
                       onClick={() => {
                         setStaffToEdit(st)
                         setIsStaffModalOpen(true)
@@ -147,15 +155,21 @@ export function TeamPage() {
                 </div>
 
                 <h2>{st.name}</h2>
-                <p>{st.contact || "Staff Barber"}</p>
+                <p>{st.contact || t("roles.barber")}</p>
 
                 <div className="team-stats">
                   <span>
-                    <small>STATUS</small>
-                    <strong style={{ fontSize: "11px" }}>{st.active ? "Available" : "Off Duty"}</strong>
+                    <small>{t("common.status").toUpperCase()}</small>
+                    <strong style={{ fontSize: "11px" }}>
+                      {st.active
+                        ? t("overview.chairAvailable")
+                        : language === "id"
+                        ? "Libur"
+                        : "Off Duty"}
+                    </strong>
                   </span>
                   <span>
-                    <small>COMMISSION</small>
+                    <small>{t("team.commissionRate").toUpperCase()}</small>
                     <strong style={{ fontSize: "11px" }}>{commissionLabel}</strong>
                   </span>
                 </div>
@@ -166,14 +180,14 @@ export function TeamPage() {
                     style={{ fontSize: "11px", padding: "8px 6px", justifyContent: "center" }}
                     onClick={() => setStaffForCompensation(st)}
                   >
-                    Compensation
+                    {language === "id" ? "Kompensasi" : "Compensation"}
                   </button>
                   <button
                     className="wide-button"
                     style={{ margin: 0, justifyContent: "center" }}
                     onClick={() => setSelectedStaffForSchedule(st)}
                   >
-                    Schedule <Icon name="arrow" size={15} />
+                    {t("overview.schedule")} <Icon name="arrow" size={15} />
                   </button>
                 </div>
               </article>

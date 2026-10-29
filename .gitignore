@@ -39,6 +39,11 @@ coverage/
 *.tmp
 .tmp-*
 
+# Agent instructions & internal API reference (excluded at any depth; keep README.md tracked)
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Aa][Pp][Ii].[Mm][Dd]
+![Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd]
+
 # IDE & OS artifacts
 .DS_Store
 Thumbs.db

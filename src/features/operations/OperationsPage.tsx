@@ -22,6 +22,7 @@ import { OpsCalendar } from "./OpsCalendar"
 import { QueuePanel } from "./QueuePanel"
 import { AppointmentDrawer } from "./AppointmentDrawer"
 import { CheckoutModal } from "../../components/CheckoutModal"
+import { useI18n } from "../../lib/i18n"
 
 interface OperationsPageProps {
   onWalkin: () => void
@@ -34,6 +35,7 @@ export function OperationsPage({
   onAppointment,
   notify,
 }: OperationsPageProps) {
+  const { t, language } = useI18n()
   const [view, setView] = useState("Day")
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date())
   const [timezone, setTimezone] = useState("Asia/Jakarta")
@@ -80,6 +82,8 @@ export function OperationsPage({
     })
   }, [])
 
+  const activeLocale = language === "id" ? "id-ID" : "en-US"
+
   // Calculate API query date range and toolbar label based on view and currentDate
   const { from, to, label } = useMemo(() => {
     if (view === "Month") {
@@ -89,7 +93,7 @@ export function OperationsPage({
       return {
         from: getDateStringInTimezone(firstDay, timezone),
         to: getDateStringInTimezone(lastDay, timezone),
-        label: formatPeriodLabel(currentDate, "Month", timezone),
+        label: formatPeriodLabel(currentDate, "Month", timezone, activeLocale),
       }
     }
     if (view === "Week") {
@@ -97,7 +101,7 @@ export function OperationsPage({
       return {
         from: getDateStringInTimezone(start, timezone),
         to: getDateStringInTimezone(end, timezone),
-        label: formatPeriodLabel(currentDate, "Week", timezone),
+        label: formatPeriodLabel(currentDate, "Week", timezone, activeLocale),
       }
     }
     // Default "Day" view
@@ -105,9 +109,9 @@ export function OperationsPage({
     return {
       from: dayStr,
       to: dayStr,
-      label: formatPeriodLabel(currentDate, "Day", timezone),
+      label: formatPeriodLabel(currentDate, "Day", timezone, activeLocale),
     }
-  }, [currentDate, view, timezone])
+  }, [currentDate, view, timezone, activeLocale])
 
   const loadData = useCallback(async () => {
     try {

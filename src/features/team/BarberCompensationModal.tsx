@@ -8,6 +8,7 @@ import {
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
 import { formatRupiah } from "../../lib/format"
+import { useI18n } from "../../lib/i18n"
 
 interface BarberCompensationModalProps {
   staff: StaffItem
@@ -20,6 +21,7 @@ export function BarberCompensationModal({
   onClose,
   onSuccess,
 }: BarberCompensationModalProps) {
+  const { t, language } = useI18n()
   const [isLoading, setIsLoading] = useState(true)
   const [activePolicy, setActivePolicy] = useState<BarberCompensationPolicy | null>(null)
   const [history, setHistory] = useState<BarberCompensationPolicy[]>([])
@@ -137,24 +139,30 @@ export function BarberCompensationModal({
   const formatModelBadge = (m: "commission" | "salary" | "hybrid") => {
     switch (m) {
       case "commission":
-        return <Badge tone="neutral">Commission Only</Badge>
+        return <Badge tone="neutral">{language === "id" ? "Hanya Komisi" : "Commission Only"}</Badge>
       case "salary":
-        return <Badge tone="info">Fixed Salary</Badge>
+        return <Badge tone="info">{language === "id" ? "Gaji Tetap" : "Fixed Salary"}</Badge>
       case "hybrid":
-        return <Badge tone="success">Base Salary + Commission</Badge>
+        return <Badge tone="success">{language === "id" ? "Gaji Pokok + Komisi" : "Base Salary + Commission"}</Badge>
     }
   }
 
   const formatPolicyDetails = (p: BarberCompensationPolicy) => {
     const parts: string[] = []
     if (p.model === "salary" || p.model === "hybrid") {
-      parts.push(`Salary: ${formatRupiah(p.monthly_salary)} / month`)
+      parts.push(
+        `${language === "id" ? "Gaji" : "Salary"}: ${formatRupiah(p.monthly_salary)} / ${language === "id" ? "bulan" : "month"}`
+      )
     }
     if (p.model === "commission" || p.model === "hybrid") {
       if (p.commission_type === "fixed") {
-        parts.push(`Commission: ${formatRupiah(p.fixed_commission_amount)} / job`)
+        parts.push(
+          `${language === "id" ? "Komisi" : "Commission"}: ${formatRupiah(p.fixed_commission_amount)} / ${language === "id" ? "layanan" : "job"}`
+        )
       } else {
-        parts.push(`Commission: ${p.commission_rate_bps / 100}% per service`)
+        parts.push(
+          `${language === "id" ? "Komisi" : "Commission"}: ${p.commission_rate_bps / 100}% ${language === "id" ? "per layanan" : "per service"}`
+        )
       }
     }
     return parts.join(" · ")
@@ -172,10 +180,12 @@ export function BarberCompensationModal({
       >
         <div className="modal-head">
           <div>
-            <span className="section-index">STAFF COMPENSATION &amp; PAYROLL</span>
+            <span className="section-index">
+              {language === "id" ? "KOMPENSASI & PENGGAJIAN STAF" : "STAFF COMPENSATION & PAYROLL"}
+            </span>
             <h2 id="comp-modal-title">{staff.name}</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close modal">
+          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
             ×
           </button>
         </div>
@@ -193,7 +203,7 @@ export function BarberCompensationModal({
 
         {isLoading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-            Loading compensation profile...
+            {language === "id" ? "Memuat profil kompensasi..." : "Loading compensation profile..."}
           </div>
         ) : (
           <div>
@@ -209,7 +219,7 @@ export function BarberCompensationModal({
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>
-                  CURRENT ACTIVE POLICY
+                  {language === "id" ? "KEBIJAKAN AKTIF SAAT INI" : "CURRENT ACTIVE POLICY"}
                 </span>
                 {activePolicy && formatModelBadge(activePolicy.model)}
               </div>
@@ -220,17 +230,18 @@ export function BarberCompensationModal({
                     {formatPolicyDetails(activePolicy)}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    Effective since{" "}
-                    <strong>{activePolicy.effective_from ? activePolicy.effective_from.split("T")[0] : "start"}</strong>
+                    {language === "id" ? "Berlaku sejak " : "Effective since "}
+                    <strong>{activePolicy.effective_from ? activePolicy.effective_from.split("T")[0] : (language === "id" ? "awal" : "start")}</strong>
                     {activePolicy.effective_to && (
-                      <span> until {activePolicy.effective_to.split("T")[0]}</span>
+                      <span> {language === "id" ? "hingga" : "until"} {activePolicy.effective_to.split("T")[0]}</span>
                     )}
                   </div>
                 </div>
               ) : (
                 <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                  No active compensation policy assigned. Falling back to legacy commission rate (
-                  {staff.commission_bps ? `${staff.commission_bps / 100}%` : "50%"}).
+                  {language === "id"
+                    ? `Belum ada kebijakan kompensasi yang ditentukan. Menggunakan persentase komisi standar (${staff.commission_bps ? `${staff.commission_bps / 100}%` : "50%"}).`
+                    : `No active compensation policy assigned. Falling back to legacy commission rate (${staff.commission_bps ? `${staff.commission_bps / 100}%` : "50%"}).`}
                 </div>
               )}
             </div>
@@ -247,7 +258,7 @@ export function BarberCompensationModal({
                   marginBottom: "12px",
                 }}
               >
-                Set New Policy (Effective-Dated)
+                {language === "id" ? "Tetapkan Kebijakan Baru (Berlaku Tanggal)" : "Set New Policy (Effective-Dated)"}
               </div>
 
               {formError && (
@@ -263,33 +274,43 @@ export function BarberCompensationModal({
 
               <div className="form-grid">
                 <label className="full">
-                  Compensation Model
+                  {language === "id" ? "Model Kompensasi" : "Compensation Model"}
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value as "commission" | "salary" | "hybrid")}
                   >
-                    <option value="commission">Commission per Completed Service</option>
-                    <option value="salary">Fixed Monthly Salary</option>
-                    <option value="hybrid">Base Salary + Commission per Service</option>
+                    <option value="commission">
+                      {language === "id" ? "Komisi per Layanan Selesai" : "Commission per Completed Service"}
+                    </option>
+                    <option value="salary">
+                      {language === "id" ? "Gaji Tetap Bulanan" : "Fixed Monthly Salary"}
+                    </option>
+                    <option value="hybrid">
+                      {language === "id" ? "Gaji Pokok + Komisi per Layanan" : "Base Salary + Commission per Service"}
+                    </option>
                   </select>
                 </label>
 
                 {(model === "commission" || model === "hybrid") && (
                   <>
                     <label>
-                      Commission Structure
+                      {language === "id" ? "Struktur Perhitungan Komisi" : "Commission Structure"}
                       <select
                         value={commissionType}
                         onChange={(e) => setCommissionType(e.target.value as "percentage" | "fixed")}
                       >
-                        <option value="percentage">Percentage of Service Revenue (%)</option>
-                        <option value="fixed">Fixed Rupiah per Completed Job</option>
+                        <option value="percentage">
+                          {language === "id" ? "Persentase Tarif Layanan (%)" : "Percentage of Service Revenue (%)"}
+                        </option>
+                        <option value="fixed">
+                          {language === "id" ? "Nominal Rupiah Tetap per Layanan" : "Fixed Rupiah per Completed Job"}
+                        </option>
                       </select>
                     </label>
 
                     {commissionType === "percentage" ? (
                       <label>
-                        Commission Rate (%)
+                        {language === "id" ? "Persentase Komisi (%)" : "Commission Rate (%)"}
                         <input
                           type="number"
                           min="0"
@@ -305,7 +326,7 @@ export function BarberCompensationModal({
                       </label>
                     ) : (
                       <label>
-                        Fixed Amount per Job (Rp)
+                        {language === "id" ? "Nominal Tetap per Layanan (Rp)" : "Fixed Amount per Job (Rp)"}
                         <input
                           type="number"
                           min="0"
@@ -315,7 +336,7 @@ export function BarberCompensationModal({
                           required
                         />
                         <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                          Formatted: {formatRupiah(fixedCommissionAmount)}
+                          {language === "id" ? "Format" : "Formatted"}: {formatRupiah(fixedCommissionAmount)}
                         </small>
                       </label>
                     )}
@@ -324,7 +345,7 @@ export function BarberCompensationModal({
 
                 {(model === "salary" || model === "hybrid") && (
                   <label className={model === "salary" ? "full" : ""}>
-                    Monthly Base Salary (Rp)
+                    {language === "id" ? "Gaji Pokok Bulanan (Rp)" : "Monthly Base Salary (Rp)"}
                     <input
                       type="number"
                       min="0"
@@ -334,13 +355,15 @@ export function BarberCompensationModal({
                       required
                     />
                     <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                      Prorated for partial months: {formatRupiah(monthlySalary)} / month
+                      {language === "id"
+                        ? `Prorata untuk bulan berjalan: ${formatRupiah(monthlySalary)} / bulan`
+                        : `Prorated for partial months: ${formatRupiah(monthlySalary)} / month`}
                     </small>
                   </label>
                 )}
 
                 <label className="full">
-                  Effective Date (YYYY-MM-DD)
+                  {language === "id" ? "Tanggal Berlaku (YYYY-MM-DD)" : "Effective Date (YYYY-MM-DD)"}
                   <input
                     type="date"
                     value={effectiveFrom}
@@ -348,7 +371,9 @@ export function BarberCompensationModal({
                     required
                   />
                   <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                    Past earnings before this date will preserve their historical rates.
+                    {language === "id"
+                      ? "Pendapatan sebelum tanggal ini akan tetap menggunakan tarif historis sebelumnya."
+                      : "Past earnings before this date will preserve their historical rates."}
                   </small>
                 </label>
               </div>
@@ -360,7 +385,9 @@ export function BarberCompensationModal({
                   style={{ fontSize: "11px", padding: "4px 8px" }}
                   onClick={() => setShowHistory(!showHistory)}
                 >
-                  {showHistory ? "Hide Policy History" : `View Policy History (${history.length})`}
+                  {showHistory
+                    ? (language === "id" ? "Sembunyikan Riwayat Kebijakan" : "Hide Policy History")
+                    : (language === "id" ? `Lihat Riwayat Kebijakan (${history.length})` : `View Policy History (${history.length})`)}
                 </button>
 
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -370,14 +397,16 @@ export function BarberCompensationModal({
                     onClick={onClose}
                     disabled={isSubmitting}
                   >
-                    Close
+                    {t("common.close")}
                   </button>
                   <button
                     type="submit"
                     className="primary-button"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Applying..." : "Apply New Policy"}
+                    {isSubmitting
+                      ? (language === "id" ? "Menerapkan..." : "Applying...")
+                      : (language === "id" ? "Terapkan Kebijakan Baru" : "Apply New Policy")}
                   </button>
                 </div>
               </div>
@@ -393,18 +422,18 @@ export function BarberCompensationModal({
                 }}
               >
                 <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
-                  COMPENSATION POLICY HISTORY
+                  {language === "id" ? "RIWAYAT KEBIJAKAN KOMPENSASI" : "COMPENSATION POLICY HISTORY"}
                 </div>
 
                 {history.length === 0 ? (
                   <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    No recorded policy transitions.
+                    {language === "id" ? "Belum ada riwayat perubahan kebijakan." : "No recorded policy transitions."}
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {history.map((h) => {
                       const fromStr = h.effective_from ? h.effective_from.split("T")[0] : ""
-                      const toStr = h.effective_to ? h.effective_to.split("T")[0] : "Present"
+                      const toStr = h.effective_to ? h.effective_to.split("T")[0] : (language === "id" ? "Sekarang" : "Present")
                       const isCurrent = !h.effective_to
 
                       return (

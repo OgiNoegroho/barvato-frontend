@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import type { ApiAppointment, ApiQueueEntry, StaffItem, ShopHour } from "../../lib/api.ts"
 import { Badge } from "../../components/ui/Badge"
+import { useI18n, type TranslationKey } from "../../lib/i18n"
 import {
   formatTimeOnly,
   formatDateShort,
@@ -48,6 +49,7 @@ export function OpsCalendar({
   timezone = "Asia/Jakarta",
   shopHours,
 }: OpsCalendarProps) {
+  const { t, language } = useI18n()
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date())
   const nowLineRef = useRef<HTMLDivElement>(null)
   const hasAutoScrolledRef = useRef(false)
@@ -159,12 +161,12 @@ export function OpsCalendar({
     <section className="ops-calendar">
       {unassignedWalkins.length > 0 && (
         <div className="unassigned-strip">
-          <span className="section-index">UNASSIGNED WALK-INS</span>
+          <span className="section-index">{t("calendar.unassignedWalkins")}</span>
           {unassignedWalkins.map((w) => {
             const isCompleted = w.status === "completed"
             const isInService = w.status === "in_service"
             const badgeTone = isCompleted ? "stone" : isInService ? "forest" : "warning"
-            const badgeLabel = isCompleted ? "Completed" : isInService ? "In Service" : "Waiting"
+            const badgeLabel = isCompleted ? t("status.completed") : isInService ? t("status.in_service") : t("status.waiting")
 
             return (
               <button
@@ -178,13 +180,13 @@ export function OpsCalendar({
                 />
                 <strong>{w.customer_name}</strong>
                 <small>
-                  {w.service_name} · Arr {formatTimeOnly(w.arrived_at, timezone)}
+                  {w.service_name} · {t("calendar.arrivedAt", { time: formatTimeOnly(w.arrived_at, timezone) })}
                 </small>
                 <Badge tone={badgeTone}>{badgeLabel}</Badge>
               </button>
             )
           })}
-          <span className="unassigned-hint">Click to view or assign from the queue</span>
+          <span className="unassigned-hint">{t("calendar.unassignedHint")}</span>
         </div>
       )}
 
@@ -203,8 +205,11 @@ export function OpsCalendar({
         >
           <span>ℹ️</span>
           <span>
-            <strong>Shop Closed:</strong> Regular business hours mark this day as closed.
-            Timeline displays hours ({timelineConfig.startFormatted} – {timelineConfig.endFormatted}) to view any bookings.
+            <strong>{language === "id" ? "Barbershop Tutup:" : "Shop Closed:"}</strong>{" "}
+            {t("calendar.shopClosedNotice", {
+              start: timelineConfig.startFormatted,
+              end: timelineConfig.endFormatted,
+            })}
           </span>
         </div>
       )}
@@ -212,8 +217,8 @@ export function OpsCalendar({
       <div className="ops-grid">
         <div className="time-column ops-time">
           <div className="head-spacer" />
-          {timelineConfig.timeSlots.map((t, idx) => (
-            <span key={`${t}-${idx}`}>{t}</span>
+          {timelineConfig.timeSlots.map((tSlot, idx) => (
+            <span key={`${tSlot}-${idx}`}>{tSlot}</span>
           ))}
         </div>
 
@@ -226,7 +231,7 @@ export function OpsCalendar({
               gridColumn: "2 / -1",
             }}
           >
-            No active barbers found for this shop.
+            {t("calendar.noActiveBarbers")}
           </div>
         ) : (
           staffList.map((barber, idx) => {
@@ -247,7 +252,9 @@ export function OpsCalendar({
                     <strong>{barber.name}</strong>
                     <small>
                       <i className={`availability ${totalActivities === 0 ? "open" : ""}`} />
-                      {totalActivities === 0 ? "Available today" : `${totalActivities} booking(s)`}
+                      {totalActivities === 0
+                        ? t("calendar.availableToday")
+                        : t("calendar.bookingCount", { count: totalActivities })}
                     </small>
                   </span>
                 </div>
@@ -275,6 +282,9 @@ export function OpsCalendar({
                             ? "ink"
                             : "copper"
 
+                    const apptStatusKey = `status.${a.status}` as TranslationKey
+                    const apptStatusLabel = t(apptStatusKey).toUpperCase()
+
                     return (
                       <button
                         key={a.id}
@@ -290,7 +300,7 @@ export function OpsCalendar({
                           )}
                           {formatTimeOnly(a.starts_at, timezone)} –{" "}
                           {formatTimeOnly(a.ends_at, timezone)} ·{" "}
-                          {a.status.replace("_", " ").toUpperCase()}
+                          {apptStatusLabel}
                         </span>
                         <strong>{a.customer_name}</strong>
                         <small>{a.service_name}</small>
@@ -334,20 +344,20 @@ export function OpsCalendar({
 
                       const tone = isCompleted ? "stone" : isInService ? "forest" : "amber"
                       const statusLabel = isCompleted
-                        ? "WALK-IN · COMPLETED"
+                        ? t("calendar.walkinCompleted")
                         : isInService
-                        ? "WALK-IN · IN SERVICE"
-                        : "WALK-IN · WAITING"
+                        ? t("calendar.walkinInService")
+                        : t("calendar.walkinWaiting")
 
                       // Format arrival time and service interval
-                      let timeDetail = `Arr ${formatTimeOnly(q.arrived_at, timezone)}`
+                      let timeDetail = t("calendar.arrivedAt", { time: formatTimeOnly(q.arrived_at, timezone) })
                       if (isCompleted && q.started_at) {
                         const endStr = q.finished_at ? formatTimeOnly(q.finished_at, timezone) : ""
                         timeDetail = endStr
-                          ? `${formatTimeOnly(q.started_at, timezone)}–${endStr} · Arr ${formatTimeOnly(q.arrived_at, timezone)}`
-                          : `Svc ${formatTimeOnly(q.started_at, timezone)} · Arr ${formatTimeOnly(q.arrived_at, timezone)}`
+                          ? `${formatTimeOnly(q.started_at, timezone)}–${endStr} · ${t("calendar.arrivedAt", { time: formatTimeOnly(q.arrived_at, timezone) })}`
+                          : `${t("calendar.serviceAt", { time: formatTimeOnly(q.started_at, timezone) })} · ${t("calendar.arrivedAt", { time: formatTimeOnly(q.arrived_at, timezone) })}`
                       } else if (isInService && q.started_at) {
-                        timeDetail = `Started ${formatTimeOnly(q.started_at, timezone)} · Arr ${formatTimeOnly(q.arrived_at, timezone)}`
+                        timeDetail = `${t("calendar.startedAt", { time: formatTimeOnly(q.started_at, timezone) })} · ${t("calendar.arrivedAt", { time: formatTimeOnly(q.arrived_at, timezone) })}`
                       }
 
                       return (
@@ -356,7 +366,7 @@ export function OpsCalendar({
                           onClick={() => onSelectQueue(q.id)}
                           className={`appointment ${tone} walkin-block ${isSelected ? "selected" : ""}`}
                           style={{ top, height }}
-                          title={`Walk-in: ${q.customer_name} (${statusLabel})`}
+                          title={`${statusLabel}: ${q.customer_name}`}
                           type="button"
                         >
                           <span>

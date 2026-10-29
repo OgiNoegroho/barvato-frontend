@@ -4,8 +4,10 @@ import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
 import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, formatTimeOnly } from "../../lib/format"
+import { useI18n } from "../../lib/i18n"
 
 export function DailyClose() {
+  const { t, language } = useI18n()
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [data, setData] = useState<RegisterCloseResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -44,12 +46,12 @@ export function DailyClose() {
       } else if (err instanceof Error) {
         setErrorMessage(err.message)
       } else {
-        setErrorMessage("Network error loading register status")
+        setErrorMessage(language === "id" ? "Kesalahan jaringan saat memuat status kasir" : "Network error loading register status")
       }
     } finally {
       setIsLoading(false)
     }
-  }, [dateStr])
+  }, [dateStr, countedCashInput, language])
 
   useEffect(() => {
     loadRegisterState()
@@ -66,7 +68,11 @@ export function DailyClose() {
     if (isSubmitting) return
 
     if (!countedCashInput.trim()) {
-      setSubmitError("Please input the counted physical drawer amount.")
+      setSubmitError(
+        language === "id"
+          ? "Harap masukkan nominal uang fisik yang telah dihitung di laci."
+          : "Please input the counted physical drawer amount."
+      )
       return
     }
 
@@ -80,7 +86,7 @@ export function DailyClose() {
         counted_cash: parsedCounted,
         note: note.trim() || undefined,
       })
-      showToast("Cash register closed and reconciled successfully")
+      showToast(t("dailyClose.closeSuccess"))
       loadRegisterState()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -88,14 +94,18 @@ export function DailyClose() {
       } else if (err instanceof Error) {
         setSubmitError(err.message)
       } else {
-        setSubmitError("Failed to close register. Please check your network connection.")
+        setSubmitError(
+          language === "id"
+            ? "Gagal menutup kasir. Periksa koneksi jaringan Anda."
+            : "Failed to close register. Please check your network connection."
+        )
       }
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const dateHeading = currentDate.toLocaleDateString("en-US", {
+  const dateHeading = currentDate.toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
@@ -107,7 +117,7 @@ export function DailyClose() {
   return (
     <div className="daily-close">
       <div>
-        <span className="section-index">REGISTER SUMMARY</span>
+        <span className="section-index">{t("dailyClose.summaryTitle")}</span>
         <h3>{dateHeading}</h3>
 
         {errorMessage && (
@@ -123,64 +133,68 @@ export function DailyClose() {
 
         {isLoading ? (
           <div style={{ padding: "32px 0", color: "var(--muted)", fontSize: "11px" }}>
-            Loading drawer records...
+            {language === "id" ? "Memuat catatan laci kasir..." : "Loading drawer records..."}
           </div>
         ) : isClosed && rc ? (
           <dl>
             <div>
-              <dt>Opening cash</dt>
+              <dt>{t("dailyClose.openingCash")}</dt>
               <dd>{formatRupiah(rc.opening_cash)}</dd>
             </div>
             <div>
-              <dt>Net cash sales</dt>
+              <dt>{t("dailyClose.netCashSales")}</dt>
               <dd>{formatRupiah(rc.net_cash_sales)}</dd>
             </div>
             <div>
-              <dt>Expected drawer</dt>
+              <dt>{t("dailyClose.expectedDrawer")}</dt>
               <dd>{formatRupiah(rc.expected_cash)}</dd>
             </div>
             <div>
-              <dt>Counted cash</dt>
+              <dt>{t("dailyClose.countedCash")}</dt>
               <dd style={{ fontWeight: 700 }}>{formatRupiah(rc.counted_cash)}</dd>
             </div>
             <div>
-              <dt>Discrepancy</dt>
+              <dt>{t("dailyClose.discrepancy")}</dt>
               <dd
                 style={{
                   color: rc.difference === 0 ? "var(--forest, green)" : "var(--amber, orange)",
                   fontWeight: 700,
                 }}
               >
-                {rc.difference > 0 ? `+${formatRupiah(rc.difference)} (Overage)` : rc.difference < 0 ? `${formatRupiah(rc.difference)} (Shortage)` : "Rp 0 (Balanced)"}
+                {rc.difference > 0
+                  ? `+${formatRupiah(rc.difference)} (${t("dailyClose.overage")})`
+                  : rc.difference < 0
+                  ? `${formatRupiah(rc.difference)} (${t("dailyClose.shortage")})`
+                  : `Rp 0 (${t("dailyClose.balanced")})`}
               </dd>
             </div>
             {rc.note && (
               <div>
-                <dt>Closing Note</dt>
+                <dt>{t("dailyClose.closingNote")}</dt>
                 <dd style={{ fontStyle: "italic" }}>{rc.note}</dd>
               </div>
             )}
             <div>
-              <dt>Closed At</dt>
+              <dt>{t("dailyClose.closedAt")}</dt>
               <dd>{formatTimeOnly(rc.closed_at)}</dd>
             </div>
           </dl>
         ) : (
           <dl>
             <div>
-              <dt>Opening cash base</dt>
+              <dt>{t("dailyClose.openingCashBase")}</dt>
               <dd>{formatRupiah(parsedOpening)}</dd>
             </div>
             <div>
-              <dt>Today's cash payments</dt>
+              <dt>{t("dailyClose.todayCashPayments")}</dt>
               <dd>{formatRupiah(netCashSales)}</dd>
             </div>
             <div>
-              <dt>Cash refunds</dt>
+              <dt>{t("dailyClose.cashRefunds")}</dt>
               <dd>Rp 0</dd>
             </div>
             <div>
-              <dt>Expected in drawer</dt>
+              <dt>{t("dailyClose.expectedInDrawer")}</dt>
               <dd style={{ fontWeight: 700 }}>{formatRupiah(expectedDrawer)}</dd>
             </div>
           </dl>
@@ -189,13 +203,13 @@ export function DailyClose() {
 
       <div className="close-action">
         <Badge tone={isClosed ? "success" : "warning"}>
-          {isClosed ? "Register closed" : "Close pending"}
+          {isClosed ? t("dailyClose.registerClosed") : t("dailyClose.closePending")}
         </Badge>
-        <h3>{isClosed ? "Register Reconciled" : "Reconcile the register"}</h3>
+        <h3>{isClosed ? t("dailyClose.reconciledTitle") : t("dailyClose.reconcileTitle")}</h3>
         <p>
           {isClosed
-            ? `The cash register for this business date was finalized on ${dateHeading}. No further cash transactions can be added to this drawer.`
-            : "Count the physical cash in the drawer and record the closing amount before ending the business day."}
+            ? t("dailyClose.reconciledNotice", { date: dateHeading })
+            : t("dailyClose.reconcileInstructions")}
         </p>
 
         {submitError && (
@@ -212,7 +226,7 @@ export function DailyClose() {
         {!isClosed && (
           <form onSubmit={handleCloseRegister}>
             <label>
-              Opening Cash Amount (IDR)
+              {t("dailyClose.openingCashInput")}
               <input
                 type="number"
                 min="0"
@@ -222,12 +236,12 @@ export function DailyClose() {
                 required
               />
               <small style={{ color: "var(--muted)", fontSize: "9px" }}>
-                Formatted: {formatRupiah(parsedOpening)}
+                {language === "id" ? "Format" : "Formatted"}: {formatRupiah(parsedOpening)}
               </small>
             </label>
 
             <label style={{ marginTop: "8px" }}>
-              Counted Physical Cash (IDR)
+              {t("dailyClose.countedCashInput")}
               <input
                 type="number"
                 min="0"
@@ -238,7 +252,7 @@ export function DailyClose() {
                 required
               />
               <small style={{ color: "var(--muted)", fontSize: "9px" }}>
-                Formatted: {formatRupiah(parsedCounted)} · Discrepancy:{" "}
+                {language === "id" ? "Format" : "Formatted"}: {formatRupiah(parsedCounted)} · {t("dailyClose.discrepancy")}:{" "}
                 <strong style={{ color: difference === 0 ? "var(--forest, green)" : "var(--amber, orange)" }}>
                   {difference >= 0 ? `+${formatRupiah(difference)}` : formatRupiah(difference)}
                 </strong>
@@ -246,9 +260,9 @@ export function DailyClose() {
             </label>
 
             <label style={{ marginTop: "8px" }}>
-              Closing note
+              {t("dailyClose.noteInput")}
               <textarea
-                placeholder="Optional closing notes or discrepancy explanations"
+                placeholder={t("dailyClose.notePlaceholder")}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
@@ -261,7 +275,7 @@ export function DailyClose() {
               disabled={isSubmitting}
               style={{ marginTop: "12px", width: "100%" }}
             >
-              {isSubmitting ? "Finalizing Register..." : "Close business day"}
+              {isSubmitting ? t("dailyClose.finalizing") : t("dailyClose.closeButton")}
             </button>
           </form>
         )}
