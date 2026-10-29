@@ -5,11 +5,10 @@ import { useI18n } from "../../lib/i18n"
 
 interface TopbarProps {
   currentPage: Page
-  onOpenModal: (kind: "appointment" | "walkin") => void
+  onNavigate: (page: Page) => void
 }
 
-export function Topbar({ currentPage, onOpenModal }: TopbarProps) {
-  const isOperations = currentPage === "Operations"
+export function Topbar({ currentPage, onNavigate }: TopbarProps) {
   const { user, logout } = useAuth()
   const { t } = useI18n()
 
@@ -42,11 +41,14 @@ export function Topbar({ currentPage, onOpenModal }: TopbarProps) {
           <span className="signal" />
         </button>
         <button
-          className="primary-button"
-          onClick={() => onOpenModal(isOperations ? "walkin" : "appointment")}
+          type="button"
+          className="icon-button"
+          onClick={() => onNavigate("Settings")}
+          aria-label={t("nav.settings")}
+          title={t("nav.settings")}
+          aria-current={currentPage === "Settings" ? "page" : undefined}
         >
-          <Icon name="plus" size={17} />
-          {isOperations ? t("shell.walkin") : t("shell.newBooking")}
+          <Icon name="settings" />
         </button>
         <button
           className="icon-button"

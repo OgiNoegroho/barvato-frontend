@@ -317,9 +317,30 @@ main {
     height: 29px;
     font-size: 20px;
   }
-  .topbar > .search,
-  .top-actions .icon-button {
+  .topbar > .search {
     display: none;
+  }
+  .mobile-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+  .mobile-brand strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-brand .brand-mark {
+    flex: none;
+  }
+  .top-actions {
+    flex: none;
+    gap: 6px;
+    margin-left: 8px;
+  }
+  .top-actions .icon-button {
+    width: 44px;
+    height: 44px;
   }
   .primary-button {
     padding: 0 11px;

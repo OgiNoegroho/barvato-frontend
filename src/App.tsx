@@ -102,7 +102,7 @@ function AppShell() {
       <Sidebar currentPage={page} onSelectPage={setPage} />
 
       <main>
-        <Topbar currentPage={page} onOpenModal={setModal} />
+        <Topbar currentPage={page} onNavigate={setPage} />
 
         <section className="content">
           <div className="page-heading">
