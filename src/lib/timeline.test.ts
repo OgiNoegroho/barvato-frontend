@@ -11,6 +11,14 @@ import {
   DEFAULT_TIMELINE_START_HOUR,
   DEFAULT_TIMELINE_END_HOUR,
 } from "./timeline.ts"
+import {
+  getDateStringInTimezone,
+  formatDateHeading,
+  formatTimeOnly,
+  getWeekRange,
+  getMonthRange,
+  getIsoWithTimezone,
+} from "./format.ts"
 import type {
   ShopHour,
   ShopClosure,
@@ -417,5 +425,36 @@ describe("timeline calculation and dynamic range", () => {
       }
     )
     assert.equal(noConflict, null)
+  })
+
+  it("11. Regression: October 30 appointments and dates stay consistent across Operations and Appointments near UTC/WIB midnight", () => {
+    const tz = "Asia/Jakarta"
+
+    // Instant: Friday, October 30, 2026 at 02:05 WIB (which is Thursday, October 29 at 19:05 UTC)
+    const earlyMorningOct30 = new Date("2026-10-30T02:05:00+07:00")
+    assert.equal(earlyMorningOct30.toISOString().split("T")[0], "2026-10-29")
+    assert.equal(getDateStringInTimezone(earlyMorningOct30, tz), "2026-10-30")
+
+    // Both pages format the heading as Friday, Oct 30 in shop timezone
+    const headingEn = formatDateHeading(earlyMorningOct30, tz, "en-US")
+    assert.match(headingEn, /Fri/)
+    assert.match(headingEn, /30/)
+
+    // Appointments around shop-local midnight on October 30 stay on 2026-10-30
+    const apptStartOfDay = getIsoWithTimezone("2026-10-30", "00:15", tz)
+    const apptEndOfDay = getIsoWithTimezone("2026-10-30", "23:45", tz)
+    assert.equal(getDateStringInTimezone(apptStartOfDay, tz), "2026-10-30")
+    assert.equal(getDateStringInTimezone(apptEndOfDay, tz), "2026-10-30")
+    assert.match(formatTimeOnly(apptStartOfDay, tz), /12:15|00:15/)
+    assert.match(formatTimeOnly(apptEndOfDay, tz), /11:45|23:45/)
+
+    // Week and Month ranges for Friday, October 30 at 02:05 WIB use shop-local calendar boundaries
+    const week = getWeekRange(earlyMorningOct30, tz)
+    assert.equal(getDateStringInTimezone(week.start, tz), "2026-10-26")
+    assert.equal(getDateStringInTimezone(week.end, tz), "2026-11-01")
+
+    const month = getMonthRange(earlyMorningOct30, tz)
+    assert.equal(month.fromStr, "2026-10-01")
+    assert.equal(month.toStr, "2026-10-31")
   })
 })

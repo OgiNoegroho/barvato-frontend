@@ -9,9 +9,9 @@ import {
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, getInitials } from "../../lib/format"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 interface FinancePeopleProps {
   type: "commission" | "payout"
@@ -61,12 +61,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
   const [payoutError, setPayoutError] = useState<string | null>(null)
 
   // Toast feedback
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+  const toast = useToast()
 
   // Safely parse user amount input supporting digits, Indonesian dot/comma formatting, and Rp prefix
   const parsedAmountResult = useMemo(() => {
@@ -230,16 +225,20 @@ export function FinancePeople({ type }: FinancePeopleProps) {
         reference_number: modalRefNumber.trim() || undefined,
         note: modalNote.trim() || undefined,
       })
-      showToast(t("finance.disburseSuccess"))
+      toast.success(t("finance.disburseSuccess"))
       setIsPayoutModalOpen(false)
       loadData()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setPayoutError(err.message || `Disbursement failed (${err.code})`)
+        toast.error(err.message || `Disbursement failed (${err.code})`)
       } else if (err instanceof Error) {
         setPayoutError(err.message)
+        toast.error(err.message)
       } else {
-        setPayoutError(language === "id" ? "Kesalahan jaringan saat mencatat pencairan." : "Network error disbursing payout.")
+        const fallback = language === "id" ? "Kesalahan jaringan saat mencatat pencairan." : "Network error disbursing payout."
+        setPayoutError(fallback)
+        toast.error(fallback)
       }
     } finally {
       setIsSubmittingPayout(false)
@@ -251,11 +250,11 @@ export function FinancePeople({ type }: FinancePeopleProps) {
 
     try {
       await payrollApi.voidPayout(payoutId, "Voided by shop manager")
-      showToast(t("finance.voidSuccess"))
+      toast.success(t("finance.voidSuccess"))
       loadData()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : (language === "id" ? "Gagal membatalkan pencairan" : "Failed to void payout")
-      alert(msg)
+      toast.error(msg)
     }
   }
 
@@ -761,8 +760,6 @@ export function FinancePeople({ type }: FinancePeopleProps) {
           </div>
         </div>
       )}
-
-      {toastMessage && <Toast message={toastMessage} />}
     </div>
   )
 }

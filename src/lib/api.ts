@@ -102,6 +102,23 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown
 }
 
+export const NOTIFICATIONS_CHANGED_EVENT = "barvato:notifications-changed"
+
+function shouldNotifyRefresh(path: string, method?: string): boolean {
+  const m = (method || "GET").toUpperCase()
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false
+  return (
+    path.startsWith("/api/appointments") ||
+    path.startsWith("/api/queue") ||
+    path.startsWith("/api/shop/closures") ||
+    path.startsWith("/api/staff") ||
+    path.startsWith("/api/payments") ||
+    path.startsWith("/api/payouts") ||
+    path.startsWith("/api/daily-close") ||
+    path.startsWith("/api/register")
+  )
+}
+
 /**
  * Core generic fetch wrapper.
  * Ensures credentials: "include" for session cookies, proper Content-Type handling,
@@ -162,6 +179,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     }
 
     throw new ApiError(response.status, errorCode, errorMessage, errorDetails)
+  }
+
+  if (typeof window !== "undefined" && shouldNotifyRefresh(path, rest.method)) {
+    window.dispatchEvent(new CustomEvent(NOTIFICATIONS_CHANGED_EVENT))
   }
 
   if (isJson) {
@@ -1068,4 +1089,98 @@ export const registerCloseApi = {
     })
   },
 }
+
+// Notifications API
+export type NotificationCategory = "appointment" | "queue" | "staff" | "barber" | "finance" | "system"
+
+export interface NotificationItem {
+  id: number
+  type: string
+  title: string
+  message: string
+  category?: NotificationCategory
+  entity_type?: "appointment" | "queue_entry" | "shop_closure" | "staff_exception" | "payment" | "payout" | "daily_close" | "staff" | "system" | null
+  entity_id?: number | null
+  data: Record<string, unknown>
+  read_at?: string | null
+  created_at: string
+}
+
+export interface NotificationsListResponse {
+  notifications: NotificationItem[]
+  unread_count: number
+  category_unread_count?: number
+  next_before_id: number | null
+}
+
+export interface NotificationPreferences {
+  shop_id: number
+  upcoming_reminder_30m_enabled: boolean
+  upcoming_reminder_15m_enabled: boolean
+  overdue_reminder_enabled: boolean
+  overdue_interval_minutes: number
+  max_overdue_reminders: number
+  excessive_wait_threshold_minutes: number
+  queue_alerts_enabled: boolean
+  barber_shift_alerts_enabled: boolean
+  financial_alerts_enabled: boolean
+  updated_at: string
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  upcoming_reminder_30m_enabled?: boolean
+  upcoming_reminder_15m_enabled?: boolean
+  overdue_reminder_enabled?: boolean
+  overdue_interval_minutes?: number
+  max_overdue_reminders?: number
+  excessive_wait_threshold_minutes?: number
+  queue_alerts_enabled?: boolean
+  barber_shift_alerts_enabled?: boolean
+  financial_alerts_enabled?: boolean
+}
+
+export const notificationsApi = {
+  list(params: { limit?: number; before_id?: number; unread_only?: boolean; category?: NotificationCategory } = {}): Promise<NotificationsListResponse> {
+    const qs = new URLSearchParams()
+    if (params.limit) qs.set("limit", String(params.limit))
+    if (params.before_id) qs.set("before_id", String(params.before_id))
+    if (params.unread_only) qs.set("unread_only", "true")
+    if (params.category) qs.set("category", params.category)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return apiFetch<NotificationsListResponse>(`/api/notifications${query}`)
+  },
+
+  unreadCount(category?: NotificationCategory): Promise<{ unread_count: number }> {
+    const qs = new URLSearchParams()
+    if (category) qs.set("category", category)
+    const query = qs.toString() ? `?${qs.toString()}` : ""
+    return apiFetch<{ unread_count: number }>(`/api/notifications/unread-count${query}`)
+  },
+
+  markRead(id: number): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(`/api/notifications/${id}/read`, {
+      method: "POST",
+    })
+  },
+
+  markAllRead(): Promise<{ success: boolean; updated: number }> {
+    return apiFetch<{ success: boolean; updated: number }>("/api/notifications/read-all", {
+      method: "POST",
+    })
+  },
+}
+
+export const notificationPreferencesApi = {
+  get(): Promise<{ preferences: NotificationPreferences }> {
+    return apiFetch<{ preferences: NotificationPreferences }>("/api/notification-preferences")
+  },
+
+  update(payload: UpdateNotificationPreferencesRequest): Promise<{ preferences: NotificationPreferences }> {
+    return apiFetch<{ preferences: NotificationPreferences }>("/api/notification-preferences", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+  },
+}
+
 

@@ -9,11 +9,11 @@ import {
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, formatTimeOnly, getDatePartsInTimezone, getDateStringInTimezone } from "../../lib/format"
 import { FinancePeople } from "./FinancePeople"
 import { DailyClose } from "./DailyClose"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 export function MoneyPage() {
   const { t, language } = useI18n()
@@ -33,12 +33,7 @@ export function MoneyPage() {
   const [kindFilter, setKindFilter] = useState<string>("all")
 
   // Toast feedback
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+  const toast = useToast()
 
   // Use shop timezone from overview, defaulting to Asia/Jakarta
   const timezone = overview?.timezone || "Asia/Jakarta"
@@ -165,11 +160,11 @@ export function MoneyPage() {
 
     try {
       await paymentApi.refund(paymentId)
-      showToast(`Transaction #${paymentId} refunded successfully`)
+      toast.success(`Transaction #${paymentId} refunded successfully`)
       loadFinancialData()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to process refund"
-      alert(msg)
+      toast.error(msg)
     }
   }
 
@@ -435,8 +430,6 @@ export function MoneyPage() {
         {tab === "Payouts" && <FinancePeople type="payout" />}
         {tab === "Daily close" && <DailyClose />}
       </section>
-
-      {toastMessage && <Toast message={toastMessage} />}
     </div>
   )
 }

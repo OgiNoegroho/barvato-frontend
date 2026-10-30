@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import type { Page } from "./types"
-import { useToast } from "./hooks/useToast"
+import { ToastProvider, useToast } from "./hooks/useToast"
 import { Icon } from "./components/ui/Icon"
 import { Sidebar } from "./components/layout/Sidebar"
 import { Topbar } from "./components/layout/Topbar"
@@ -22,10 +22,16 @@ function AppShell() {
   const { user, currentShop, isLoading, isAuthenticated, initError, retrySession } = useAuth()
   const { t } = useI18n()
   const [page, setPage] = useState<Page>("Overview")
+  const [navTarget, setNavTarget] = useState<{
+    entityType: string
+    entityId: number
+    targetDate?: string
+  } | null>(null)
+  const handleClearNavTarget = useCallback(() => setNavTarget(null), [])
   const [modal, setModal] = useState<
     "appointment" | "walkin" | { kind: "appointment"; initialDate?: string } | null
   >(null)
-  const { toast, notify } = useToast()
+  const { notify } = useToast()
 
   if (isLoading) {
     return (
@@ -102,7 +108,28 @@ function AppShell() {
       <Sidebar currentPage={page} onSelectPage={setPage} />
 
       <main>
-        <Topbar currentPage={page} onNavigate={setPage} />
+        <Topbar
+          currentPage={page}
+          onNavigate={setPage}
+          onNavigateEntity={(entityType, entityId, data) => {
+            if (entityType && entityId) {
+              const targetDate =
+                typeof data?.start_date === "string"
+                  ? data.start_date
+                  : typeof data?.starts_at === "string"
+                    ? data.starts_at
+                    : undefined
+              setNavTarget({ entityType, entityId, targetDate })
+            }
+            if (entityType === "payment" || entityType === "payout" || entityType === "daily_close") {
+              setPage("Money")
+            } else if (entityType === "staff" || entityType === "staff_exception") {
+              setPage("Team")
+            } else {
+              setPage("Operations")
+            }
+          }}
+        />
 
         <section className="content">
           <div className="page-heading">
@@ -135,6 +162,10 @@ function AppShell() {
               onWalkin={() => setModal("walkin")}
               onAppointment={(initialDate) => setModal({ kind: "appointment", initialDate })}
               notify={notify}
+              targetAppointmentId={navTarget?.entityType === "appointment" ? navTarget.entityId : null}
+              targetQueueId={navTarget?.entityType === "queue_entry" ? navTarget.entityId : null}
+              targetDate={navTarget?.targetDate || null}
+              onClearTarget={handleClearNavTarget}
             />
           )}
           {page === "Appointments" && <AppointmentsPage />}
@@ -150,15 +181,14 @@ function AppShell() {
         <BookingModal
           kind={typeof modal === "string" ? modal : modal.kind}
           initialDate={typeof modal === "object" ? modal.initialDate : undefined}
+          timezone={currentShop?.timezone || "Asia/Jakarta"}
           onClose={() => setModal(null)}
           onSuccess={(msg) => {
             setModal(null)
-            notify(msg)
+            notify(msg, "success")
           }}
         />
       )}
-
-      <Toast message={toast} />
     </div>
   )
 }
@@ -166,9 +196,12 @@ function AppShell() {
 export function App() {
   return (
     <I18nProvider>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppShell />
+          <Toast />
+        </AuthProvider>
+      </ToastProvider>
     </I18nProvider>
   )
 }

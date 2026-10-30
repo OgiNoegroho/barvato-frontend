@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import {
   staffApi,
   appointmentApi,
+  shopApi,
   type StaffItem,
   type StaffScheduleItem,
   type StaffHour,
@@ -12,9 +13,15 @@ import {
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { getInitials, formatTimeOnly } from "../../lib/format"
+import {
+  getInitials,
+  formatTimeOnly,
+  getDateStringInTimezone,
+  getDayOfWeekInTimezone,
+} from "../../lib/format"
 import { useAuth } from "../auth/AuthContext"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 interface TeamScheduleProps {
   staff: StaffItem
@@ -51,6 +58,7 @@ export function TeamSchedule({
   onUpdated,
 }: TeamScheduleProps) {
   const { t, language } = useI18n()
+  const toast = useToast()
   const { currentShop } = useAuth()
   const canManageSchedule = currentShop?.role === "owner" || currentShop?.role === "manager"
 
@@ -58,19 +66,31 @@ export function TeamSchedule({
 
   // --- Tab 1: Daily Agenda State ---
   const [currentDate, setCurrentDate] = useState(() => new Date())
+  const [timezone, setTimezone] = useState("Asia/Jakarta")
   const [schedule, setSchedule] = useState<StaffScheduleItem | null>(null)
   const [appointments, setAppointments] = useState<ApiAppointment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const dateStr = currentDate.toISOString().split("T")[0]
+  useEffect(() => {
+    shopApi
+      .get()
+      .then((res) => {
+        if (res?.shop?.timezone) {
+          setTimezone(res.shop.timezone)
+        }
+      })
+      .catch(() => { })
+  }, [])
+
+  const dateStr = useMemo(
+    () => getDateStringInTimezone(currentDate, timezone),
+    [currentDate, timezone]
+  )
 
   const loadDayData = useCallback(async () => {
     setIsLoading(true)
     setErrorMessage(null)
-
-    const from = `${dateStr}T00:00:00Z`
-    const to = `${dateStr}T23:59:59Z`
 
     try {
       const [schedRes, apptRes] = await Promise.all([
@@ -78,13 +98,13 @@ export function TeamSchedule({
           schedule: {
             staff_id: staff.id,
             date: dateStr,
-            day_of_week: currentDate.getDay(),
+            day_of_week: getDayOfWeekInTimezone(currentDate, timezone),
             is_open: true,
             open_time: "09:00:00",
             close_time: "21:00:00",
           },
         })),
-        appointmentApi.list(from, to, staff.id, true).catch(() => ({ appointments: [] })),
+        appointmentApi.list(dateStr, dateStr, staff.id, true).catch(() => ({ appointments: [] })),
       ])
 
       setSchedule(schedRes.schedule)
@@ -238,12 +258,15 @@ export function TeamSchedule({
       setWeeklyMap(map)
       setIsWeeklyDirty(false)
       setWeeklyConflicts(null)
-      onUpdated?.(t("availability.weeklySavedToast", { name: staff.name }))
+      const msg = t("availability.weeklySavedToast", { name: staff.name })
+      toast.success(msg)
+      onUpdated?.(msg)
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "existing_bookings_conflict" && err.details) {
         setWeeklyConflicts(err.details as BookingConflictDetails)
       } else if (err instanceof Error) {
         setWeeklyError(err.message)
+        toast.error(err.message)
       }
     } finally {
       setIsSavingWeekly(false)
@@ -256,8 +279,12 @@ export function TeamSchedule({
   const [exceptionError, setExceptionError] = useState<string | null>(null)
   const [isExceptionFormOpen, setIsExceptionFormOpen] = useState(false)
   const [editingException, setEditingException] = useState<StaffException | null>(null)
-  const [excStartDate, setExcStartDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [excEndDate, setExcEndDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [excStartDate, setExcStartDate] = useState(() =>
+    getDateStringInTimezone(new Date(), "Asia/Jakarta")
+  )
+  const [excEndDate, setExcEndDate] = useState(() =>
+    getDateStringInTimezone(new Date(), "Asia/Jakarta")
+  )
   const [excIsWorking, setExcIsWorking] = useState(false)
   const [excOpenTime, setExcOpenTime] = useState("10:00")
   const [excCloseTime, setExcCloseTime] = useState("18:00")
@@ -287,7 +314,7 @@ export function TeamSchedule({
   }, [activeTab, loadExceptions])
 
   const openCreateException = () => {
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = getDateStringInTimezone(new Date(), timezone)
     setEditingException(null)
     setExcStartDate(todayStr)
     setExcEndDate(todayStr)
@@ -358,12 +385,15 @@ export function TeamSchedule({
       setEditingException(null)
       setExcConflicts(null)
       await loadExceptions()
-      onUpdated?.(t("availability.exceptionSavedToast"))
+      const msg = t("availability.exceptionSavedToast")
+      toast.success(msg)
+      onUpdated?.(msg)
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "existing_bookings_conflict" && err.details) {
         setExcConflicts(err.details as BookingConflictDetails)
       } else if (err instanceof Error) {
         setExceptionError(err.message)
+        toast.error(err.message)
       }
     } finally {
       setIsSavingException(false)
@@ -375,10 +405,13 @@ export function TeamSchedule({
     try {
       await staffApi.deleteException(staff.id, excId)
       await loadExceptions()
-      onUpdated?.(t("availability.exceptionDeletedToast"))
+      const msg = t("availability.exceptionDeletedToast")
+      toast.success(msg)
+      onUpdated?.(msg)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setExceptionError(err.message)
+        toast.error(err.message)
       }
     }
   }
@@ -415,6 +448,7 @@ export function TeamSchedule({
       weekday: "long",
       month: "short",
       day: "numeric",
+      timeZone: timezone,
     }
   )
 
@@ -497,10 +531,9 @@ export function TeamSchedule({
                       ? `${t("calendar.closureBannerTitle")}${schedule.reason ? ` · ${schedule.reason}` : ""}`
                       : `${t("team.notScheduled")}${schedule?.reason ? ` · ${schedule.reason}` : ""}`
                     : schedule
-                    ? `${schedule.open_time.slice(0, 5)} – ${schedule.close_time.slice(0, 5)}${
-                        schedule.source === "staff_exception" && schedule.reason ? ` · ${schedule.reason}` : ""
+                      ? `${schedule.open_time.slice(0, 5)} – ${schedule.close_time.slice(0, 5)}${schedule.source === "staff_exception" && schedule.reason ? ` · ${schedule.reason}` : ""
                       }`
-                    : "09:00 – 21:00"}
+                      : "09:00 – 21:00"}
                 </small>
               </div>
               <button onClick={handleNextDay} aria-label="Next day">
@@ -530,8 +563,8 @@ export function TeamSchedule({
                   {schedule?.shop_closed
                     ? t("calendar.closureBannerTitle")
                     : schedule?.source === "staff_exception"
-                    ? t("availability.badgeLeave")
-                    : t("team.dayOff")}
+                      ? t("availability.badgeLeave")
+                      : t("team.dayOff")}
                 </h3>
                 <p>
                   {schedule?.reason
@@ -585,8 +618,8 @@ export function TeamSchedule({
                     </div>
                   ) : (
                     activeAppts.map((item) => {
-                      const startTime = formatTimeOnly(item.starts_at)
-                      const endTime = formatTimeOnly(item.ends_at)
+                      const startTime = formatTimeOnly(item.starts_at, timezone)
+                      const endTime = formatTimeOnly(item.ends_at, timezone)
                       const isCheckedIn = item.status === "checked_in"
                       const isCompleted = item.status === "completed"
 
@@ -604,15 +637,15 @@ export function TeamSchedule({
                                     isCompleted
                                       ? "neutral"
                                       : isCheckedIn
-                                      ? "success"
-                                      : "neutral"
+                                        ? "success"
+                                        : "neutral"
                                   }
                                 >
                                   {isCheckedIn
                                     ? t("status.in_service")
                                     : isCompleted
-                                    ? t("status.completed")
-                                    : t("status.confirmed")}
+                                      ? t("status.completed")
+                                      : t("status.confirmed")}
                                 </Badge>
                                 {isOff && !isCompleted && (
                                   <Badge tone="danger">{t("calendar.bookingConflictBadge")}</Badge>
@@ -1048,9 +1081,9 @@ export function TeamSchedule({
                         <Badge tone={exc.is_working ? "warning" : "danger"}>
                           {exc.is_working
                             ? t("availability.badgeAdjusted", {
-                                open: formatTimeInput(exc.open_time, "09:00"),
-                                close: formatTimeInput(exc.close_time, "21:00"),
-                              })
+                              open: formatTimeInput(exc.open_time, "09:00"),
+                              close: formatTimeInput(exc.close_time, "21:00"),
+                            })
                             : t("availability.badgeLeave")}
                         </Badge>
                         {canManageSchedule && (

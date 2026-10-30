@@ -132,18 +132,38 @@ export function getWeekRange(
   date: Date,
   timeZone = "Asia/Jakarta"
 ): { start: Date; end: Date } {
-  const d = new Date(date)
-  // Day of week: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const day = d.getDay()
-  const diffToMonday = day === 0 ? -6 : 1 - day
-  const monday = new Date(d)
-  monday.setDate(d.getDate() + diffToMonday)
-  monday.setHours(0, 0, 0, 0)
+  const { year, month, day } = getDatePartsInTimezone(date, timeZone)
+  // Day of week in shop timezone: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const dow = getDayOfWeekInTimezone(date, timeZone)
+  const diffToMonday = dow === 0 ? -6 : 1 - dow
 
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  sunday.setHours(23, 59, 59, 999)
-  return { start: monday, end: sunday }
+  const mondayUtc = new Date(Date.UTC(year, month - 1, day + diffToMonday))
+  const sundayUtc = new Date(Date.UTC(year, month - 1, day + diffToMonday + 6))
+
+  const mondayStr = mondayUtc.toISOString().slice(0, 10)
+  const sundayStr = sundayUtc.toISOString().slice(0, 10)
+
+  const start = new Date(getIsoWithTimezone(mondayStr, "00:00", timeZone))
+  const end = new Date(getIsoWithTimezone(sundayStr, "23:59", timeZone))
+  end.setUTCSeconds(59, 999)
+  return { start, end }
+}
+
+export function getMonthRange(
+  date: Date,
+  timeZone = "Asia/Jakarta"
+): { start: Date; end: Date; fromStr: string; toStr: string } {
+  const { year, month } = getDatePartsInTimezone(date, timeZone)
+  const firstDayUtc = new Date(Date.UTC(year, month - 1, 1))
+  const lastDayUtc = new Date(Date.UTC(year, month, 0))
+
+  const fromStr = firstDayUtc.toISOString().slice(0, 10)
+  const toStr = lastDayUtc.toISOString().slice(0, 10)
+
+  const start = new Date(getIsoWithTimezone(fromStr, "00:00", timeZone))
+  const end = new Date(getIsoWithTimezone(toStr, "23:59", timeZone))
+  end.setUTCSeconds(59, 999)
+  return { start, end, fromStr, toStr }
 }
 
 export function formatPeriodLabel(

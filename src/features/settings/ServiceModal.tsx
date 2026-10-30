@@ -3,6 +3,7 @@ import { servicesApi, type ServiceItem, ApiError } from "../../lib/api"
 import { formatRupiah } from "../../lib/format"
 import { Icon } from "../../components/ui/Icon"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 interface ServiceModalProps {
   service?: ServiceItem | null
@@ -13,6 +14,7 @@ interface ServiceModalProps {
 export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps) {
   const isEditing = Boolean(service)
   const { t, language } = useI18n()
+  const toast = useToast()
 
   const [name, setName] = useState(service?.name ?? "")
   const [durationMin, setDurationMin] = useState<number>(service?.duration_min ?? 30)
@@ -54,6 +56,7 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
     setErrorMessage(null)
 
     try {
+      let successMsg = ""
       if (isEditing && service) {
         await servicesApi.update(service.id, {
           name: trimmedName,
@@ -61,36 +64,38 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
           price,
           active,
         })
-        onSuccess(
+        successMsg =
           language === "id"
             ? `Layanan "${trimmedName}" berhasil diperbarui`
             : `Service "${trimmedName}" updated successfully`
-        )
       } else {
         await servicesApi.create({
           name: trimmedName,
           duration_min: durationMin,
           price,
         })
-        onSuccess(
+        successMsg =
           language === "id"
             ? `Layanan "${trimmedName}" berhasil dibuat`
             : `Service "${trimmedName}" created successfully`
-        )
       }
+      toast.success(successMsg)
+      onSuccess(successMsg)
       onClose()
     } catch (err: unknown) {
+      let errorMsg = ""
       if (err instanceof ApiError) {
-        setErrorMessage(err.message || `Failed to save service (${err.code})`)
+        errorMsg = err.message || `Failed to save service (${err.code})`
       } else if (err instanceof Error) {
-        setErrorMessage(err.message)
+        errorMsg = err.message
       } else {
-        setErrorMessage(
+        errorMsg =
           language === "id"
             ? "Terjadi kesalahan saat menyimpan layanan."
             : "An unexpected error occurred while saving the service."
-        )
       }
+      setErrorMessage(errorMsg)
+      toast.error(errorMsg)
     } finally {
       setIsSubmitting(false)
     }

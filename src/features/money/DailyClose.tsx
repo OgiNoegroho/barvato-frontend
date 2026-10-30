@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from "react"
 import { registerCloseApi, type RegisterCloseResponse, ApiError } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
 import { formatRupiah, formatTimeOnly } from "../../lib/format"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 export function DailyClose() {
   const { t, language } = useI18n()
@@ -19,13 +19,7 @@ export function DailyClose() {
   const [note, setNote] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+  const toast = useToast()
 
   const dateStr = currentDate.toISOString().split("T")[0]
 
@@ -86,19 +80,23 @@ export function DailyClose() {
         counted_cash: parsedCounted,
         note: note.trim() || undefined,
       })
-      showToast(t("dailyClose.closeSuccess"))
+      toast.success(t("dailyClose.closeSuccess"))
       loadRegisterState()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
-        setSubmitError(err.message || `Failed to close register (${err.code})`)
+        const msg = err.message || `Failed to close register (${err.code})`
+        setSubmitError(msg)
+        toast.error(msg)
       } else if (err instanceof Error) {
         setSubmitError(err.message)
+        toast.error(err.message)
       } else {
-        setSubmitError(
+        const msg =
           language === "id"
             ? "Gagal menutup kasir. Periksa koneksi jaringan Anda."
             : "Failed to close register. Please check your network connection."
-        )
+        setSubmitError(msg)
+        toast.error(msg)
       }
     } finally {
       setIsSubmitting(false)
@@ -280,8 +278,6 @@ export function DailyClose() {
           </form>
         )}
       </div>
-
-      {toastMessage && <Toast message={toastMessage} />}
     </div>
   )
 }

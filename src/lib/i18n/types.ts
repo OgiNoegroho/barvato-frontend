@@ -493,6 +493,23 @@ export type TranslationKey =
   | "booking.conflictScheduleWarning"
   | "booking.conflictAppointmentOverlap"
   | "booking.conflictBarberBusy"
+  | "notifications.title"
+  | "notifications.markAllRead"
+  | "notifications.markRead"
+  | "notifications.empty"
+  | "notifications.emptyDesc"
+  | "notifications.filterAll"
+  | "notifications.filterUnread"
+  | "notifications.categoryAll"
+  | "notifications.categoryAppointments"
+  | "notifications.categoryQueue"
+  | "notifications.categoryStaff"
+  | "notifications.categoryFinance"
+  | "notifications.priorityHigh"
+  | "notifications.justNow"
+  | "notifications.loadMore"
+  | "notifications.loading"
+  | "notifications.errorLoading"
 
 export interface I18nContextValue {
   language: Language

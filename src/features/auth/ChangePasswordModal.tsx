@@ -3,10 +3,12 @@ import { useAuth } from "./AuthContext"
 import { ApiError } from "../../lib/api"
 import { Icon } from "../../components/ui/Icon"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 export function ChangePasswordModal() {
   const { changePassword, logout } = useAuth()
   const { t, language } = useI18n()
+  const toast = useToast()
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -45,6 +47,9 @@ export function ChangePasswordModal() {
 
     try {
       await changePassword(currentPassword, newPassword)
+      toast.success(
+        language === "id" ? "Kata sandi berhasil diperbarui" : "Password updated successfully"
+      )
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setErrorMessage(

@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { formatRupiah } from "../lib/format"
 import { Icon } from "./ui/Icon"
 import { useI18n } from "../lib/i18n"
+import { useToast } from "../hooks/useToast"
 
 interface CheckoutModalProps {
   item: {
@@ -18,6 +19,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) {
   const { t, language } = useI18n()
+  const toast = useToast()
   const [method, setMethod] = useState<"cash" | "transfer">("cash")
   const [tipInput, setTipInput] = useState<string>("0")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -44,6 +46,7 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
             ? "Gagal mencatat pembayaran"
             : "Failed to record payment"
       setErrorMessage(message)
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }

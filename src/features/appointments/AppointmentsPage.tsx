@@ -7,11 +7,16 @@ import {
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
 import { BookingModal } from "../../components/BookingModal"
 import { CheckoutModal } from "../../components/CheckoutModal"
 import { AppointmentDrawer } from "../operations/AppointmentDrawer"
-import { getInitials, formatTimeOnly, getDateStringInTimezone } from "../../lib/format"
+import { useToast } from "../../hooks/useToast"
+import {
+  getInitials,
+  formatTimeOnly,
+  formatDateHeading,
+  getDateStringInTimezone,
+} from "../../lib/format"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
 
 export function AppointmentsPage() {
@@ -31,7 +36,7 @@ export function AppointmentsPage() {
           setTimezone(res.shop.timezone)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // Filters
@@ -51,24 +56,19 @@ export function AppointmentsPage() {
   } | null>(null)
 
   // Toast feedback
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+  const toast = useToast()
 
-  const dateStr = currentDate.toISOString().split("T")[0]
+  const dateStr = useMemo(
+    () => getDateStringInTimezone(currentDate, timezone),
+    [currentDate, timezone]
+  )
 
   const loadAppointments = useCallback(async () => {
     setIsLoading(true)
     setErrorMessage(null)
 
-    const from = `${dateStr}T00:00:00Z`
-    const to = `${dateStr}T23:59:59Z`
-
     try {
-      const res = await appointmentApi.list(from, to, undefined, true)
+      const res = await appointmentApi.list(dateStr, dateStr, undefined, true)
       setAppointments(res.appointments || [])
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -85,6 +85,11 @@ export function AppointmentsPage() {
 
   useEffect(() => {
     loadAppointments()
+    const handleRefresh = () => loadAppointments()
+    window.addEventListener("barvato:refresh-data", handleRefresh)
+    return () => {
+      window.removeEventListener("barvato:refresh-data", handleRefresh)
+    }
   }, [loadAppointments])
 
   // Filter appointments locally by status and search query
@@ -130,36 +135,36 @@ export function AppointmentsPage() {
   const handleCheckIn = async (appt: ApiAppointment) => {
     try {
       await appointmentApi.checkIn(appt.id)
-      showToast(`${appt.customer_name} checked in`)
+      toast.success(`${appt.customer_name} checked in`)
       setSelectedAppointment(null)
       loadAppointments()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to check in"
-      alert(msg)
+      toast.error(msg)
     }
   }
 
   const handleCancel = async (appt: ApiAppointment) => {
     try {
       await appointmentApi.cancel(appt.id)
-      showToast(`Appointment for ${appt.customer_name} cancelled`)
+      toast.success(`Appointment for ${appt.customer_name} cancelled`)
       setSelectedAppointment(null)
       loadAppointments()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to cancel"
-      alert(msg)
+      toast.error(msg)
     }
   }
 
   const handleNoShow = async (appt: ApiAppointment) => {
     try {
       await appointmentApi.noShow(appt.id)
-      showToast(`Appointment for ${appt.customer_name} marked as no-show`)
+      toast.success(`Appointment for ${appt.customer_name} marked as no-show`)
       setSelectedAppointment(null)
       loadAppointments()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to record no-show"
-      alert(msg)
+      toast.error(msg)
     }
   }
 
@@ -177,22 +182,24 @@ export function AppointmentsPage() {
 
   const handleConfirmCheckout = async (method: "cash" | "transfer", tip: number) => {
     if (!checkoutItem) return
-    await appointmentApi.complete(checkoutItem.id, { method, tip })
-    showToast(`Payment recorded and appointment completed`)
-    setCheckoutItem(null)
-    loadAppointments()
+    try {
+      await appointmentApi.complete(checkoutItem.id, { method, tip })
+      toast.success(`Payment recorded and appointment completed`)
+      setCheckoutItem(null)
+      loadAppointments()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to record payment"
+      toast.error(msg)
+    }
   }
 
-  const dateFormatted = currentDate.toLocaleDateString(
-    language === "id" ? "id-ID" : "en-US",
-    {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    }
+  const dateFormatted = formatDateHeading(
+    currentDate,
+    timezone,
+    language === "id" ? "id-ID" : "en-US"
   )
 
-  const isToday = new Date().toDateString() === currentDate.toDateString()
+  const isToday = getDateStringInTimezone(new Date(), timezone) === dateStr
 
   return (
     <section className="data-section">
@@ -302,8 +309,8 @@ export function AppointmentsPage() {
               {appointments.length === 0
                 ? `${t("appointments.noAppointments")} (${dateFormatted}).`
                 : language === "id"
-                ? "Tidak ada janji temu yang cocok dengan filter pencarian."
-                : "No appointments match your search and filter criteria."}
+                  ? "Tidak ada janji temu yang cocok dengan filter pencarian."
+                  : "No appointments match your search and filter criteria."}
             </p>
             {appointments.length === 0 && (
               <button
@@ -318,8 +325,8 @@ export function AppointmentsPage() {
         ) : (
           filteredAppointments.map((a) => {
             const initials = getInitials(a.customer_name)
-            const startTime = formatTimeOnly(a.starts_at)
-            const endTime = formatTimeOnly(a.ends_at)
+            const startTime = formatTimeOnly(a.starts_at, timezone)
+            const endTime = formatTimeOnly(a.ends_at, timezone)
 
             const badgeTone =
               a.status === "completed"
@@ -382,6 +389,7 @@ export function AppointmentsPage() {
       {selectedAppointment && (
         <AppointmentDrawer
           detail={selectedAppointment}
+          timezone={timezone}
           onClose={() => setSelectedAppointment(null)}
           onCheckIn={handleCheckIn}
           onComplete={handleInitiateComplete}
@@ -406,14 +414,11 @@ export function AppointmentsPage() {
           initialDate={getDateStringInTimezone(currentDate, timezone)}
           timezone={timezone}
           onClose={() => setIsBookingModalOpen(false)}
-          onSuccess={(msg) => {
-            showToast(msg)
+          onSuccess={() => {
             loadAppointments()
           }}
         />
       )}
-
-      {toastMessage && <Toast message={toastMessage} />}
     </section>
   )
 }

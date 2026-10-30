@@ -18,6 +18,7 @@ import {
   formatPeriodLabel,
   getDateStringInTimezone,
   getWeekRange,
+  getMonthRange,
 } from "../../lib/format"
 import { getBookingConflictReason } from "../../lib/timeline"
 import { Icon } from "../../components/ui/Icon"
@@ -28,19 +29,28 @@ import { AppointmentDrawer } from "./AppointmentDrawer"
 import { TeamSchedule } from "../team/TeamSchedule"
 import { CheckoutModal } from "../../components/CheckoutModal"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 interface OperationsPageProps {
   onWalkin: () => void
   onAppointment: (initialDate?: string) => void
-  notify: (message: string) => void
+  notify?: (message: string) => void
+  targetAppointmentId?: number | null
+  targetQueueId?: number | null
+  targetDate?: string | null
+  onClearTarget?: () => void
 }
 
 export function OperationsPage({
   onWalkin,
   onAppointment,
-  notify,
+  targetAppointmentId,
+  targetQueueId,
+  targetDate,
+  onClearTarget,
 }: OperationsPageProps) {
   const { t, language } = useI18n()
+  const toast = useToast()
   const [view, setView] = useState("Day")
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date())
   const [timezone, setTimezone] = useState("Asia/Jakarta")
@@ -76,6 +86,45 @@ export function OperationsPage({
     staffName?: string
   } | null>(null)
 
+  // Handle external navigation targets (e.g. from notification clicks)
+  useEffect(() => {
+    if (targetAppointmentId) {
+      appointmentApi
+        .get(targetAppointmentId)
+        .then((res) => {
+          if (res.appointment) {
+            setDetail(res.appointment)
+            const apptDate = new Date(res.appointment.starts_at)
+            if (!isNaN(apptDate.getTime())) {
+              setCurrentDate(apptDate)
+            }
+          }
+        })
+        .catch(() => { })
+      onClearTarget?.()
+    }
+  }, [targetAppointmentId, onClearTarget])
+
+  useEffect(() => {
+    if (targetQueueId) {
+      setSelectedQueueId(targetQueueId)
+      setCollapsed(false)
+      onClearTarget?.()
+    }
+  }, [targetQueueId, onClearTarget])
+
+  useEffect(() => {
+    if (targetDate && !targetAppointmentId) {
+      const parsed = targetDate.includes("T")
+        ? new Date(targetDate)
+        : new Date(`${targetDate}T12:00:00Z`)
+      if (!isNaN(parsed.getTime())) {
+        setCurrentDate(parsed)
+      }
+      onClearTarget?.()
+    }
+  }, [targetDate, targetAppointmentId, onClearTarget])
+
   // Fetch shop profile (timezone) and business hours on mount
   useEffect(() => {
     Promise.all([
@@ -96,12 +145,10 @@ export function OperationsPage({
   // Calculate API query date range and toolbar label based on view and currentDate
   const { from, to, label } = useMemo(() => {
     if (view === "Month") {
-      const d = new Date(currentDate)
-      const firstDay = new Date(d.getFullYear(), d.getMonth(), 1)
-      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+      const { fromStr, toStr } = getMonthRange(currentDate, timezone)
       return {
-        from: getDateStringInTimezone(firstDay, timezone),
-        to: getDateStringInTimezone(lastDay, timezone),
+        from: fromStr,
+        to: toStr,
         label: formatPeriodLabel(currentDate, "Month", timezone, activeLocale),
       }
     }
@@ -174,7 +221,12 @@ export function OperationsPage({
     loadData()
     // Periodic refresh every 15 seconds to keep queue & calendar synced
     const interval = setInterval(loadData, 15000)
-    return () => clearInterval(interval)
+    const handleRefresh = () => loadData()
+    window.addEventListener("barvato:refresh-data", handleRefresh)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("barvato:refresh-data", handleRefresh)
+    }
   }, [loadData])
 
   // Navigation handlers
@@ -257,10 +309,10 @@ export function OperationsPage({
   async function handleAssign(item: ApiQueueEntry, staffId: number) {
     try {
       await queueApi.assign(item.id, staffId)
-      notify(`${item.customer_name} assigned to barber`)
+      toast.success(`${item.customer_name} assigned to barber`)
       loadData()
     } catch (err: unknown) {
-      notify(err instanceof Error ? err.message : "Failed to assign barber")
+      toast.error(err instanceof Error ? err.message : "Failed to assign barber")
     }
   }
 
@@ -268,7 +320,7 @@ export function OperationsPage({
     try {
       await queueApi.start(item.id, override)
       setSelectedQueueId(item.id)
-      notify(`${item.customer_name} is now in service`)
+      toast.success(`${item.customer_name} is now in service`)
       loadData()
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "schedule_conflict") {
@@ -280,7 +332,7 @@ export function OperationsPage({
           handleStart(item, true)
         }
       } else {
-        notify(err instanceof Error ? err.message : "Failed to start service")
+        toast.error(err instanceof Error ? err.message : "Failed to start service")
       }
     }
   }
@@ -289,10 +341,10 @@ export function OperationsPage({
     try {
       await queueApi.cancel(item.id)
       if (selectedQueueId === item.id) setSelectedQueueId(null)
-      notify(`${item.customer_name} removed from queue`)
+      toast.success(`${item.customer_name} removed from queue`)
       loadData()
     } catch (err: unknown) {
-      notify(err instanceof Error ? err.message : "Failed to cancel queue entry")
+      toast.error(err instanceof Error ? err.message : "Failed to cancel queue entry")
     }
   }
 
@@ -300,33 +352,33 @@ export function OperationsPage({
   async function handleCheckIn(a: ApiAppointment) {
     try {
       await appointmentApi.checkIn(a.id)
-      notify("Customer checked in successfully")
+      toast.success("Customer checked in successfully")
       setDetail(null)
       loadData()
     } catch (err: unknown) {
-      notify(err instanceof Error ? err.message : "Failed to check in appointment")
+      toast.error(err instanceof Error ? err.message : "Failed to check in appointment")
     }
   }
 
   async function handleCancelAppointment(a: ApiAppointment) {
     try {
       await appointmentApi.cancel(a.id)
-      notify("Appointment cancelled")
+      toast.success("Appointment cancelled successfully")
       setDetail(null)
       loadData()
     } catch (err: unknown) {
-      notify(err instanceof Error ? err.message : "Failed to cancel appointment")
+      toast.error(err instanceof Error ? err.message : "Failed to cancel appointment")
     }
   }
 
   async function handleNoShow(a: ApiAppointment) {
     try {
       await appointmentApi.noShow(a.id)
-      notify("Marked as no-show")
+      toast.success("Marked as no-show")
       setDetail(null)
       loadData()
     } catch (err: unknown) {
-      notify(err instanceof Error ? err.message : "Failed to mark as no-show")
+      toast.error(err instanceof Error ? err.message : "Failed to mark as no-show")
     }
   }
 
@@ -337,7 +389,7 @@ export function OperationsPage({
     try {
       const res = await appointmentApi.update(id, data)
       setDetail(res.appointment)
-      notify(t("calendar.rescheduleSuccess"))
+      toast.success(t("calendar.rescheduleSuccess"))
       loadData()
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "schedule_conflict" && !data.override) {
@@ -346,6 +398,7 @@ export function OperationsPage({
           return
         }
       }
+      toast.error(err instanceof Error ? err.message : "Failed to reschedule appointment")
       throw err
     }
   }
@@ -398,14 +451,14 @@ export function OperationsPage({
 
     if (checkoutTarget.kind === "queue") {
       const res = await queueApi.complete(checkoutTarget.id, { method, tip })
-      notify(
+      toast.success(
         `Completed: ${checkoutTarget.customerName} · ${formatRupiah(
           res.payment.amount + res.payment.tip
         )} recorded (${method})`
       )
     } else {
       const res = await appointmentApi.complete(checkoutTarget.id, { method, tip })
-      notify(
+      toast.success(
         `Completed: ${checkoutTarget.customerName} · ${formatRupiah(
           res.payment.amount + res.payment.tip
         )} recorded (${method})`
@@ -506,7 +559,7 @@ export function OperationsPage({
             loadData()
           }}
           onUpdated={(msg) => {
-            if (msg) notify(msg)
+            if (msg) toast.success(msg)
             loadData()
           }}
         />

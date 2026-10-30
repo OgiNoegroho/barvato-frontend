@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
+import { useToast } from "../../hooks/useToast"
 import {
   servicesApi,
   shopApi,
   staffApi,
   payrollApi,
+  notificationPreferencesApi,
+  type NotificationPreferences,
+  type UpdateNotificationPreferencesRequest,
   type ServiceItem,
   type ShopDetails,
   type ShopHour,
@@ -93,13 +96,11 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
   const [title, description] = headers[section] || [section, ""]
 
-  // --- Toast feedback state ---
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // --- Toast feedback ---
+  const toast = useToast()
   const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+    toast.notify(msg)
+  }, [toast])
 
   const { currentShop, updateCurrentShop } = useAuth()
   const canManageSettings = currentShop?.role === "owner"
@@ -143,6 +144,57 @@ export function SettingsContent({ section }: SettingsContentProps) {
       loadShopDetails()
     }
   }, [section, loadShopDetails])
+
+  // --- Notification Preferences State ---
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null)
+  const [isLoadingPrefs, setIsLoadingPrefs] = useState(false)
+  const [prefsError, setPrefsError] = useState<string | null>(null)
+
+  const loadNotifPrefs = useCallback(async () => {
+    setIsLoadingPrefs(true)
+    setPrefsError(null)
+    try {
+      const res = await notificationPreferencesApi.get()
+      if (res?.preferences) {
+        setNotifPrefs(res.preferences)
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setPrefsError(err.message || "Failed to load notification preferences.")
+      } else {
+        setPrefsError("Network error while loading notification preferences.")
+      }
+    } finally {
+      setIsLoadingPrefs(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (section === "Notifications") {
+      void loadNotifPrefs()
+    }
+  }, [section, loadNotifPrefs])
+
+  const updatePreference = async <K extends keyof UpdateNotificationPreferencesRequest>(
+    key: K,
+    val: UpdateNotificationPreferencesRequest[K]
+  ) => {
+    if (!notifPrefs || !canManageSettings) return
+    const prev = { ...notifPrefs }
+    const updated = { ...notifPrefs, [key]: val }
+    setNotifPrefs(updated)
+    try {
+      const res = await notificationPreferencesApi.update({ [key]: val })
+      if (res?.preferences) {
+        setNotifPrefs(res.preferences)
+      }
+      showToast(language === "id" ? "Pengaturan notifikasi disimpan" : "Notification settings saved")
+    } catch (err: unknown) {
+      setNotifPrefs(prev)
+      const msg = err instanceof Error ? err.message : "Failed to update notification settings"
+      toast.error(msg)
+    }
+  }
 
   const handleSaveShop = async () => {
     if (!canManageSettings || !shopName.trim()) return
@@ -1366,38 +1418,224 @@ export function SettingsContent({ section }: SettingsContentProps) {
         </div>
       )}
 
-      {/* --- Notifications (Localized) --- */}
+      {/* --- Notifications (Configurable Preferences) --- */}
       {section === "Notifications" && (
         <div className="notification-settings">
-          {[
-            [
-              t("settings.notifApptConfirm"),
-              t("settings.notifApptConfirmDesc"),
-            ],
-            [
-              t("settings.notifReminder"),
-              t("settings.notifReminderDesc"),
-            ],
-            [
-              t("settings.notifQueue"),
-              t("settings.notifQueueDesc"),
-            ],
-            [
-              t("settings.notifDailySummary"),
-              t("settings.notifDailySummaryDesc"),
-            ],
-          ].map((x, i) => (
-            <label key={x[0]}>
-              <span>
-                <strong>{x[0]}</strong>
-                <small>{x[1]}</small>
-              </span>
-              <span className="switch">
-                <input type="checkbox" defaultChecked={i < 3} />
-                <i />
-              </span>
-            </label>
-          ))}
+          {isLoadingPrefs ? (
+            <div style={{ padding: "30px", textAlign: "center", color: "var(--muted)" }}>
+              {t("notifications.loading")}
+            </div>
+          ) : prefsError ? (
+            <div style={{ padding: "20px", color: "var(--red)" }}>
+              <p>{prefsError}</p>
+              <button
+                type="button"
+                className="filter-button"
+                onClick={() => void loadNotifPrefs()}
+                style={{ marginTop: "10px" }}
+              >
+                {t("common.retry")}
+              </button>
+            </div>
+          ) : notifPrefs ? (
+            <>
+              {/* 1. Upcoming 30m */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Pengingat Janji Temu 30 Menit"
+                      : "30-Minute Upcoming Appointment Reminder"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Kirim notifikasi 30 menit sebelum jadwal temu dimulai."
+                      : "Send an alert 30 minutes before scheduled start time."}
+                  </small>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.upcoming_reminder_30m_enabled}
+                    disabled={!canManageSettings}
+                    onChange={(e) => updatePreference("upcoming_reminder_30m_enabled", e.target.checked)}
+                  />
+                  <i />
+                </span>
+              </label>
+
+              {/* 2. Upcoming 15m */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Pengingat Janji Temu 15 Menit"
+                      : "15-Minute Upcoming Appointment Reminder"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Kirim notifikasi 15 menit sebelum jadwal temu dimulai."
+                      : "Send an alert 15 minutes before scheduled start time."}
+                  </small>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.upcoming_reminder_15m_enabled}
+                    disabled={!canManageSettings}
+                    onChange={(e) => updatePreference("upcoming_reminder_15m_enabled", e.target.checked)}
+                  />
+                  <i />
+                </span>
+              </label>
+
+              {/* 3. Overdue Detection */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Peringatan Janji Temu Terlambat (Overdue)"
+                      : "Overdue Appointment Alerts"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Beri tahu jika janji temu belum check-in atau dimulai setelah jadwalnya lewat."
+                      : "Alert if an appointment has not checked in or started after scheduled start."}
+                  </small>
+                </span>
+                <div className="notif-setting-action">
+                  {notifPrefs.overdue_reminder_enabled && (
+                    <select
+                      className="notif-setting-select"
+                      value={notifPrefs.overdue_interval_minutes}
+                      disabled={!canManageSettings}
+                      onChange={(e) =>
+                        updatePreference("overdue_interval_minutes", Number(e.target.value))
+                      }
+                      title="Interval pengingat keterlambatan"
+                    >
+                      <option value={5}>Setiap 5 menit / Every 5m</option>
+                      <option value={10}>Setiap 10 menit / Every 10m</option>
+                      <option value={15}>Setiap 15 menit / Every 15m</option>
+                      <option value={30}>Setiap 30 menit / Every 30m</option>
+                    </select>
+                  )}
+                  <span className="switch">
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs.overdue_reminder_enabled}
+                      disabled={!canManageSettings}
+                      onChange={(e) => updatePreference("overdue_reminder_enabled", e.target.checked)}
+                    />
+                    <i />
+                  </span>
+                </div>
+              </label>
+
+              {/* 4. Excessive Queue Wait */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Peringatan Waktu Tunggu Antrean Berlebih"
+                      : "Excessive Queue Wait Alert"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Kirim notifikasi jika antrean walk-in menunggu melebihi batas waktu toleransi."
+                      : "Send an alert if walk-in clients wait longer than the designated threshold."}
+                  </small>
+                </span>
+                <div className="notif-setting-action">
+                  {notifPrefs.queue_alerts_enabled && (
+                    <select
+                      className="notif-setting-select"
+                      value={notifPrefs.excessive_wait_threshold_minutes}
+                      disabled={!canManageSettings}
+                      onChange={(e) =>
+                        updatePreference(
+                          "excessive_wait_threshold_minutes",
+                          Number(e.target.value)
+                        )
+                      }
+                      title="Batas waktu tunggu antrean"
+                    >
+                      <option value={15}>15 menit / 15m</option>
+                      <option value={25}>25 menit / 25m</option>
+                      <option value={30}>30 menit / 30m</option>
+                      <option value={45}>45 menit / 45m</option>
+                      <option value={60}>60 menit / 60m</option>
+                    </select>
+                  )}
+                  <span className="switch">
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs.queue_alerts_enabled}
+                      disabled={!canManageSettings}
+                      onChange={(e) =>
+                        updatePreference("queue_alerts_enabled", e.target.checked)
+                      }
+                    />
+                    <i />
+                  </span>
+                </div>
+              </label>
+
+              {/* 5. Shift Reminders */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Pengingat Shift Staf & Kapster"
+                      : "Staff & Barber Shift Alerts"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Peringatan awal sebelum jadwal kerja kapster dimulai dan saat shift berakhir."
+                      : "Notify barbers before work shift begins and when shifts conclude."}
+                  </small>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.barber_shift_alerts_enabled}
+                    disabled={!canManageSettings}
+                    onChange={(e) =>
+                      updatePreference("barber_shift_alerts_enabled", e.target.checked)
+                    }
+                  />
+                  <i />
+                </span>
+              </label>
+
+              {/* 6. Financial & Register Alerts */}
+              <label>
+                <span>
+                  <strong>
+                    {language === "id"
+                      ? "Notifikasi Transaksi Keuangan & Tutup Kasir"
+                      : "Financial Transactions & Daily Register Alerts"}
+                  </strong>
+                  <small>
+                    {language === "id"
+                      ? "Terima pembaruan untuk pembayaran sukses, refund, pencairan, dan rekonsiliasi harian."
+                      : "Receive alerts for recorded payments, refunds, payouts, and register closures."}
+                  </small>
+                </span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.financial_alerts_enabled}
+                    disabled={!canManageSettings}
+                    onChange={(e) =>
+                      updatePreference("financial_alerts_enabled", e.target.checked)
+                    }
+                  />
+                  <i />
+                </span>
+              </label>
+            </>
+          ) : null}
         </div>
       )}
 
@@ -1614,8 +1852,6 @@ export function SettingsContent({ section }: SettingsContentProps) {
         section !== "Payroll & Compensation" && (
           <button className="primary-button settings-save">{t("common.save")}</button>
         )}
-
-      {toastMessage && <Toast message={toastMessage} />}
     </section>
   )
 }

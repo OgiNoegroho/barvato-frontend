@@ -8,12 +8,12 @@ import {
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
 import { Icon } from "../../components/ui/Icon"
-import { Toast } from "../../components/layout/Toast"
 import { getInitials } from "../../lib/format"
 import { TeamSchedule } from "./TeamSchedule"
 import { StaffModal } from "./StaffModal"
 import { BarberCompensationModal } from "./BarberCompensationModal"
 import { useI18n } from "../../lib/i18n"
+import { useToast } from "../../hooks/useToast"
 
 export function TeamPage() {
   const { t, language } = useI18n()
@@ -30,13 +30,7 @@ export function TeamPage() {
   const [staffForCompensation, setStaffForCompensation] = useState<StaffItem | null>(null)
   const [staffToEdit, setStaffToEdit] = useState<StaffItem | null>(null)
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg)
-    const timer = setTimeout(() => setToastMessage(null), 3500)
-    return () => clearTimeout(timer)
-  }, [])
+  const toast = useToast()
 
   const loadStaff = useCallback(async () => {
     setIsLoading(true)
@@ -257,7 +251,7 @@ export function TeamPage() {
           initialTab={selectedStaffForSchedule.tab}
           onClose={() => setSelectedStaffForSchedule(null)}
           onUpdated={(msg) => {
-            if (msg) showToast(msg)
+            if (msg) toast.success(msg)
             loadStaff()
           }}
         />
@@ -268,7 +262,7 @@ export function TeamPage() {
           staff={staffForCompensation}
           onClose={() => setStaffForCompensation(null)}
           onSuccess={(msg) => {
-            showToast(msg)
+            toast.success(msg)
             loadStaff()
           }}
         />
@@ -279,13 +273,11 @@ export function TeamPage() {
           staff={staffToEdit}
           onClose={() => setIsStaffModalOpen(false)}
           onSuccess={(msg) => {
-            showToast(msg)
+            toast.success(msg)
             loadStaff()
           }}
         />
       )}
-
-      {toastMessage && <Toast message={toastMessage} />}
     </>
   )
 }

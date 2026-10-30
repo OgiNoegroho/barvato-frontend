@@ -14,7 +14,13 @@ import {
   type ShopHour,
   ApiError,
 } from "../../lib/api"
-import { formatRupiah, formatMinutesAgo, getInitials } from "../../lib/format"
+import {
+  formatRupiah,
+  formatMinutesAgo,
+  getInitials,
+  getDateStringInTimezone,
+  getDayOfWeekInTimezone,
+} from "../../lib/format"
 import { Chair } from "./Chair"
 import { useI18n } from "../../lib/i18n"
 
@@ -36,27 +42,33 @@ export function OverviewPage({
   const [staff, setStaff] = useState<StaffItem[]>([])
   const [hours, setHours] = useState<ShopHour[]>([])
 
+  const [timezone, setTimezone] = useState("Asia/Jakarta")
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
+  const todayStr = useMemo(
+    () => getDateStringInTimezone(new Date(), timezone),
+    [timezone]
+  )
 
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true)
     setErrorMessage(null)
 
-    const from = `${todayStr}T00:00:00Z`
-    const to = `${todayStr}T23:59:59Z`
-
     try {
-      const [overviewRes, queueRes, apptsRes, staffRes, hoursRes] =
+      const [shopRes, overviewRes, queueRes, apptsRes, staffRes, hoursRes] =
         await Promise.all([
+          shopApi.get().catch(() => null),
           overviewApi.get(todayStr).catch(() => null),
           queueApi.list().catch(() => ({ queue: [] })),
-          appointmentApi.list(from, to, undefined, false).catch(() => ({ appointments: [] })),
+          appointmentApi.list(todayStr, todayStr, undefined, false).catch(() => ({ appointments: [] })),
           staffApi.list(true).catch(() => ({ staff: [] })),
           shopApi.getHours().catch(() => ({ hours: [] })),
         ])
+
+      if (shopRes?.shop?.timezone && shopRes.shop.timezone !== timezone) {
+        setTimezone(shopRes.shop.timezone)
+      }
 
       setOverview(overviewRes)
       setQueue(queueRes.queue || [])
@@ -103,7 +115,7 @@ export function OverviewPage({
   )
 
   // Calculate shop open status for today
-  const todayDayOfWeek = new Date().getDay()
+  const todayDayOfWeek = getDayOfWeekInTimezone(new Date(), timezone)
   const todayHours = hours.find((h) => h.day_of_week === todayDayOfWeek)
   const isShopOpenToday = todayHours ? todayHours.is_open : true
   const closingTimeFormatted = todayHours?.close_time
@@ -142,8 +154,8 @@ export function OverviewPage({
                 ? `Buka · hingga ${closingTimeFormatted}`
                 : `Open · until ${closingTimeFormatted}`
               : language === "id"
-              ? "Tutup hari ini"
-              : "Closed today"}
+                ? "Tutup hari ini"
+                : "Closed today"}
           </Badge>
         </div>
 
@@ -256,8 +268,8 @@ export function OverviewPage({
                   "started_at" in activeJob && activeJob.started_at
                     ? activeJob.started_at
                     : "starts_at" in activeJob
-                    ? activeJob.starts_at
-                    : activeJob.created_at
+                      ? activeJob.starts_at
+                      : activeJob.created_at
 
                 const startMs = new Date(startTimeStr).getTime()
                 const elapsedMin = Math.max(0, Math.floor((Date.now() - startMs) / (60 * 1000)))

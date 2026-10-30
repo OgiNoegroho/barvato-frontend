@@ -19,6 +19,7 @@ import {
   getDatePartsInTimezone,
   getDayOfWeekInTimezone,
   getWeekRange,
+  getMonthRange,
 } from "../../lib/format.ts"
 import {
   calculateTimelineConfig,
@@ -115,9 +116,9 @@ export function OpsCalendar({
       startStr = getDateStringInTimezone(start, timezone)
       endStr = getDateStringInTimezone(end, timezone)
     } else if (view === "Month") {
-      const d = new Date(currentDate)
-      startStr = getDateStringInTimezone(new Date(d.getFullYear(), d.getMonth(), 1), timezone)
-      endStr = getDateStringInTimezone(new Date(d.getFullYear(), d.getMonth() + 1, 0), timezone)
+      const { fromStr, toStr } = getMonthRange(currentDate, timezone)
+      startStr = fromStr
+      endStr = toStr
     }
     return shopClosures.filter((c) => c.start_date <= endStr && c.end_date >= startStr)
   }, [view, shopClosures, currentDate, timezone, viewedDayStr])
@@ -272,17 +273,17 @@ export function OpsCalendar({
             <span>
               {timelineConfig.closure.is_closed
                 ? t("calendar.closureBannerReason", {
-                    reason:
-                      timelineConfig.closure.reason ||
-                      (language === "id" ? "Penutupan toko" : "Shop closure"),
-                  })
+                  reason:
+                    timelineConfig.closure.reason ||
+                    (language === "id" ? "Penutupan toko" : "Shop closure"),
+                })
                 : t("calendar.closureBannerAdjustedDesc", {
-                    open: (timelineConfig.closure.open_time || "").slice(0, 5),
-                    close: (timelineConfig.closure.close_time || "").slice(0, 5),
-                    reason:
-                      timelineConfig.closure.reason ||
-                      (language === "id" ? "Jam operasional khusus" : "Special hours"),
-                  })}
+                  open: (timelineConfig.closure.open_time || "").slice(0, 5),
+                  close: (timelineConfig.closure.close_time || "").slice(0, 5),
+                  reason:
+                    timelineConfig.closure.reason ||
+                    (language === "id" ? "Jam operasional khusus" : "Special hours"),
+                })}
             </span>
           </div>
           <small style={{ fontWeight: 600 }}>
@@ -365,7 +366,11 @@ export function OpsCalendar({
           </div>
         ) : (
           staffList.map((barber, idx) => {
-            const barberAppointments = appointments.filter((a) => a.staff_id === barber.id)
+            const barberAppointments = appointments.filter(
+              (a) =>
+                a.staff_id === barber.id &&
+                (view === "Day" ? getDateStringInTimezone(a.starts_at, timezone) === viewedDayStr : true)
+            )
             const barberWalkins = queueItems.filter(
               (q) =>
                 q.assigned_staff_id === barber.id &&
@@ -387,16 +392,16 @@ export function OpsCalendar({
             const preShiftTop = 0
             const preShiftHeight =
               view === "Day" &&
-              !isShopClosedDay &&
-              staffAvail.isWorking &&
-              staffAvail.openTime
+                !isShopClosedDay &&
+                staffAvail.isWorking &&
+                staffAvail.openTime
                 ? calcTimeHmTop(staffAvail.openTime)
                 : 0
             const postShiftTop =
               view === "Day" &&
-              !isShopClosedDay &&
-              staffAvail.isWorking &&
-              staffAvail.closeTime
+                !isShopClosedDay &&
+                staffAvail.isWorking &&
+                staffAvail.closeTime
                 ? calcTimeHmTop(staffAvail.closeTime)
                 : timelineConfig.totalHeight
             const postShiftHeight = Math.max(0, timelineConfig.totalHeight - postShiftTop)
@@ -442,8 +447,8 @@ export function OpsCalendar({
                         <small>
                           <i className={`availability ${totalActivities === 0 ? "open" : ""}`} />
                           {staffAvail.status === "custom_hours" &&
-                          staffAvail.openTime &&
-                          staffAvail.closeTime
+                            staffAvail.openTime &&
+                            staffAvail.closeTime
                             ? `${staffAvail.openTime}–${staffAvail.closeTime} · `
                             : ""}
                           {totalActivities === 0
@@ -571,19 +576,19 @@ export function OpsCalendar({
                       a.status === "confirmed" || a.status === "checked_in"
                     const conflictReason = isActiveBooking
                       ? getBookingConflictReason(
-                          {
-                            startsAt: a.starts_at,
-                            endsAt: a.ends_at,
-                            staffId: a.staff_id,
-                          },
-                          {
-                            timezone,
-                            shopHours,
-                            shopClosures,
-                            staffHours,
-                            staffExceptions,
-                          }
-                        )
+                        {
+                          startsAt: a.starts_at,
+                          endsAt: a.ends_at,
+                          staffId: a.staff_id,
+                        },
+                        {
+                          timezone,
+                          shopHours,
+                          shopClosures,
+                          staffHours,
+                          staffExceptions,
+                        }
+                      )
                       : null
 
                     const tone =
@@ -611,11 +616,10 @@ export function OpsCalendar({
                             ? "2px solid var(--danger)"
                             : undefined,
                         }}
-                        title={`${a.customer_name} · ${a.service_name}${
-                          conflictReason
+                        title={`${a.customer_name} · ${a.service_name}${conflictReason
                             ? ` (${t("calendar.bookingConflictBadge")})`
                             : ""
-                        }`}
+                          }`}
                         type="button"
                       >
                         <span>
@@ -684,27 +688,27 @@ export function OpsCalendar({
                       ).toISOString()
                       const conflictReason = !isCompleted
                         ? getBookingConflictReason(
-                            {
-                              startsAt: startTime,
-                              endsAt: endTimeIso,
-                              staffId: q.assigned_staff_id,
-                            },
-                            {
-                              timezone,
-                              shopHours,
-                              shopClosures,
-                              staffHours,
-                              staffExceptions,
-                            }
-                          )
+                          {
+                            startsAt: startTime,
+                            endsAt: endTimeIso,
+                            staffId: q.assigned_staff_id,
+                          },
+                          {
+                            timezone,
+                            shopHours,
+                            shopClosures,
+                            staffHours,
+                            staffExceptions,
+                          }
+                        )
                         : null
 
                       const tone = isCompleted ? "stone" : isInService ? "forest" : "amber"
                       const statusLabel = isCompleted
                         ? t("calendar.walkinCompleted")
                         : isInService
-                        ? t("calendar.walkinInService")
-                        : t("calendar.walkinWaiting")
+                          ? t("calendar.walkinInService")
+                          : t("calendar.walkinWaiting")
 
                       // Format arrival time and service interval
                       let timeDetail = t("calendar.arrivedAt", { time: formatTimeOnly(q.arrived_at, timezone) })

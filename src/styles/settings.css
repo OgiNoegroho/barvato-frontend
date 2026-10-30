@@ -169,6 +169,23 @@
   margin-top: 4px;
 }
 
+.notif-setting-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notif-setting-select {
+  height: 32px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  padding: 0 8px;
+  font-size: 11px;
+  font-family: inherit;
+  border-radius: 3px;
+  outline: none;
+}
+
 .billing-panel {
   display: grid;
   grid-template-columns: 1.3fr 1fr 1fr;

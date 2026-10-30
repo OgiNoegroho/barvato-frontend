@@ -12,9 +12,14 @@ import {
   type CustomerItem,
   type StaffAvailabilityItem,
 } from "../lib/api"
-import { formatRupiah, getIsoWithTimezone } from "../lib/format"
+import {
+  formatRupiah,
+  getDateStringInTimezone,
+  getIsoWithTimezone,
+} from "../lib/format"
 import { Icon } from "./ui/Icon"
 import { useI18n } from "../lib/i18n"
+import { useToast } from "../hooks/useToast"
 
 interface BookingModalProps {
   kind: "appointment" | "walkin"
@@ -36,6 +41,7 @@ export function BookingModal({
   onSuccess,
 }: BookingModalProps) {
   const { t, language } = useI18n()
+  const toast = useToast()
   const isWalkin = kind === "walkin"
 
   // Catalog state
@@ -55,8 +61,13 @@ export function BookingModal({
   const [selectedStaffId, setSelectedStaffId] = useState<number | "">(initialStaffId ?? "")
 
   // Date & Time state (for appointments)
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
-  const [appointmentDate, setAppointmentDate] = useState(initialDate || todayStr)
+  const todayStr = useMemo(
+    () => getDateStringInTimezone(new Date(), shopTimezone),
+    [shopTimezone]
+  )
+  const [appointmentDate, setAppointmentDate] = useState(
+    () => initialDate || getDateStringInTimezone(new Date(), shopTimezone)
+  )
   const [appointmentTime, setAppointmentTime] = useState("10:00")
 
   // Availability state
@@ -78,8 +89,21 @@ export function BookingModal({
           setShopTimezone(res.shop.timezone)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
+
+  // Sync prop changes
+  useEffect(() => {
+    if (initialDate) {
+      setAppointmentDate(initialDate)
+    }
+  }, [initialDate])
+
+  useEffect(() => {
+    if (initialStaffId) {
+      setSelectedStaffId(initialStaffId)
+    }
+  }, [initialStaffId])
 
   // Load catalog data
   useEffect(() => {
@@ -105,6 +129,11 @@ export function BookingModal({
         }
         if (initialStaffId) {
           setSelectedStaffId(initialStaffId)
+        } else if (!isWalkin && staffList.length > 0) {
+          const firstActive = staffList.find((s) => s.active)
+          if (firstActive) {
+            setSelectedStaffId(firstActive.id)
+          }
         }
       } finally {
         if (mounted) setIsLoadingCatalog(false)
@@ -115,7 +144,7 @@ export function BookingModal({
     return () => {
       mounted = false
     }
-  }, [initialStaffId])
+  }, [initialStaffId, isWalkin])
 
   // Recalculate dynamic barber availability whenever relevant form inputs change
   useEffect(() => {
@@ -148,7 +177,19 @@ export function BookingModal({
           controller.signal
         )
 
-        setAvailabilityList(res.availability || [])
+        const list = res.availability || []
+        setAvailabilityList(list)
+
+        // Auto-select first available active barber for appointments if none selected
+        if (!isWalkin) {
+          setSelectedStaffId((current) => {
+            if (current) return current
+            const firstAvail = list.find((a) => a.available)
+            if (firstAvail) return firstAvail.staff_id
+            const firstActive = services.length > 0 ? staff.find((s) => s.active) : undefined
+            return firstActive ? firstActive.id : ""
+          })
+        }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
           return
@@ -172,6 +213,7 @@ export function BookingModal({
     shopTimezone,
     excludeAppointmentId,
     services,
+    staff,
   ])
 
   // Lookup the currently selected barber's availability status
@@ -180,20 +222,40 @@ export function BookingModal({
     return availabilityList.find((a) => a.staff_id === Number(selectedStaffId)) || null
   }, [selectedStaffId, availabilityList])
 
-  // Check if the shop itself is closed at the selected time across all kapsters
+  // Check if the shop itself is closed or outside operating hours across all kapsters
   const shopClosedReason = useMemo(() => {
     if (availabilityList.length === 0) return null
-    const first = availabilityList[0]
-    if (!first.available && first.reason && first.reason.toLowerCase().startsWith("shop closed")) {
-      return first.reason
+    const allUnavailable = availabilityList.every(
+      (a) =>
+        !a.available &&
+        (a.reason?.toLowerCase().includes("shop closed") ||
+          a.reason?.toLowerCase().includes("day off") ||
+          a.status === "outside_working_hours")
+    )
+    if (allUnavailable && availabilityList.length > 0) {
+      const first = availabilityList[0]
+      if (first.reason?.toLowerCase().includes("shop closed")) {
+        return first.reason
+      }
+      if (first.status === "outside_working_hours") {
+        return language === "id" ? "di luar jam operasional toko" : "outside shop operating hours"
+      }
+      if (first.reason?.toLowerCase().includes("day off")) {
+        return language === "id" ? "toko tutup (hari libur)" : "shop closed (day off)"
+      }
     }
     return null
-  }, [availabilityList])
+  }, [availabilityList, language])
 
   // Formatted validation message when selected barber is busy or unavailable
   const staffValidationMessage = useMemo(() => {
     if (shopClosedReason) {
       return t("booking.shopClosedError", { reason: shopClosedReason })
+    }
+    if (!selectedStaffId && !isWalkin) {
+      return language === "id"
+        ? "Silakan pilih kapster untuk janji temu ini."
+        : "Please select an assigned barber for this appointment."
     }
     if (!selectedStaffAvailability) return null
     if (selectedStaffAvailability.available) return null
@@ -207,8 +269,8 @@ export function BookingModal({
     }
     if (selectedStaffAvailability.conflict_type === "walkin") {
       return language === "id"
-        ? `${selectedStaffAvailability.name} sedang melayani pelanggan lain. Pilih kapster lain atau ubah waktu.`
-        : `${selectedStaffAvailability.name} is currently serving another customer. Choose another barber or change the time.`
+        ? `${selectedStaffAvailability.name} sedang melayani pelanggan lain. Jadwal bentrok ini dapat diabaikan jika Anda tetap ingin menjadwalkan.`
+        : `${selectedStaffAvailability.name} is currently serving another customer. You can override and proceed if desired.`
     }
     if (selectedStaffAvailability.status === "outside_working_hours") {
       return t("booking.staffOutsideHoursError")
@@ -223,7 +285,7 @@ export function BookingModal({
       name: selectedStaffAvailability.name,
       reason: selectedStaffAvailability.reason || (language === "id" ? "tidak tersedia" : "unavailable"),
     })
-  }, [selectedStaffAvailability, shopClosedReason, t, language])
+  }, [selectedStaffId, isWalkin, selectedStaffAvailability, shopClosedReason, t, language])
 
   const handleSelectCustomer = (c: CustomerItem) => {
     setSelectedCustomerId(c.id)
@@ -239,14 +301,16 @@ export function BookingModal({
   const isSubmitDisabled =
     isSubmitting ||
     isLoadingCatalog ||
+    isLoadingAvailability ||
     Boolean(shopClosedReason) ||
     !customerName.trim() ||
     !selectedServiceId ||
-    (!isWalkin && !selectedStaffId) ||
+    (!isWalkin && (!selectedStaffId || !appointmentDate || !appointmentTime)) ||
     Boolean(
       selectedStaffAvailability &&
-        !selectedStaffAvailability.available &&
-        selectedStaffId !== initialStaffId
+      !selectedStaffAvailability.available &&
+      selectedStaffAvailability.conflict_type !== "walkin" &&
+      selectedStaffId !== initialStaffId
     )
 
   const handleSubmit = async (e: React.FormEvent, override = false) => {
@@ -288,13 +352,14 @@ export function BookingModal({
       !override &&
       selectedStaffAvailability &&
       !selectedStaffAvailability.available &&
+      selectedStaffAvailability.conflict_type !== "walkin" &&
       selectedStaffId !== initialStaffId
     ) {
       setErrorMessage(
         staffValidationMessage ||
-          (language === "id"
-            ? "Kapster yang dipilih tidak tersedia pada waktu ini."
-            : "The selected barber is not available at this time.")
+        (language === "id"
+          ? "Kapster yang dipilih tidak tersedia pada waktu ini."
+          : "The selected barber is not available at this time.")
       )
       return
     }
@@ -321,13 +386,15 @@ export function BookingModal({
               phone: trimmedPhone || undefined,
             })
             customerId = newCust.customer.id
-          } catch {
+          } catch (err: unknown) {
             if (!isWalkin) {
-              throw new Error(
-                language === "id"
-                  ? "Gagal mendaftarkan pelanggan. Periksa format nomor telepon."
-                  : "Failed to register customer record. Please check phone format."
-              )
+              const errMsg =
+                err instanceof ApiError
+                  ? err.message
+                  : language === "id"
+                    ? "Gagal mendaftarkan pelanggan. Periksa data pelanggan."
+                    : "Failed to register customer record. Please check customer details."
+              throw new Error(errMsg)
             }
           }
         }
@@ -341,11 +408,13 @@ export function BookingModal({
           service_id: Number(selectedServiceId),
           assigned_staff_id: selectedStaffId ? Number(selectedStaffId) : null,
         })
-        onSuccess(
+        const msg =
           language === "id"
             ? `${trimmedName} ditambahkan ke antrean walk-in`
             : `${trimmedName} added to walk-in queue`
-        )
+        toast.success(msg)
+        window.dispatchEvent(new CustomEvent("barvato:refresh-data"))
+        onSuccess(msg)
         onClose()
       } else {
         const startsAt = getIsoWithTimezone(appointmentDate, appointmentTime, shopTimezone)
@@ -365,24 +434,27 @@ export function BookingModal({
           starts_at: startsAt,
           override,
         })
-        onSuccess(
+        const msg =
           language === "id"
             ? `Janji temu berhasil dibuat untuk ${trimmedName} pukul ${appointmentTime}`
             : `Appointment booked for ${trimmedName} at ${appointmentTime}`
-        )
+        toast.success(msg)
+        window.dispatchEvent(new CustomEvent("barvato:refresh-data"))
+        onSuccess(msg)
         onClose()
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.isConflict) {
           if (err.code === "shop_closed") {
-            setErrorMessage(
-              t("booking.shopClosedError", { reason: err.message })
-            )
+            const msg = t("booking.shopClosedError", { reason: err.message })
+            setErrorMessage(msg)
+            toast.error(msg)
             return
           }
           if (err.code === "staff_unavailable") {
             setErrorMessage(err.message)
+            toast.error(err.message)
             return
           }
           if (err.code === "schedule_conflict") {
@@ -390,17 +462,25 @@ export function BookingModal({
             return
           }
           if (err.code === "appointment_overlap") {
-            setErrorMessage(t("booking.conflictAppointmentOverlap"))
+            const msg = t("booking.conflictAppointmentOverlap")
+            setErrorMessage(msg)
+            toast.error(msg)
             return
           }
           if (err.code === "barber_busy") {
-            setErrorMessage(err.message || t("booking.conflictBarberBusy"))
+            const msg = err.message || t("booking.conflictBarberBusy")
+            setErrorMessage(msg)
+            toast.error(msg)
             return
           }
         }
-        setErrorMessage(err.message || t("common.error"))
+        const msg = err.message || t("common.error")
+        setErrorMessage(msg)
+        toast.error(msg)
       } else {
-        setErrorMessage(err instanceof Error ? err.message : t("common.error"))
+        const msg = err instanceof Error ? err.message : t("common.error")
+        setErrorMessage(msg)
+        toast.error(msg)
       }
     } finally {
       setIsSubmitting(false)
@@ -427,8 +507,8 @@ export function BookingModal({
                   ? "ANTREAN WALK-IN"
                   : "WALK-IN QUEUE"
                 : language === "id"
-                ? "RESERVASI JANJI TEMU"
-                : "APPOINTMENT BOOKING"}
+                  ? "RESERVASI JANJI TEMU"
+                  : "APPOINTMENT BOOKING"}
             </span>
             <h2 id="modal-title">
               {isWalkin ? t("booking.titleWalkin") : t("booking.titleAppointment")}
@@ -625,8 +705,12 @@ export function BookingModal({
                 }
                 required={!isWalkin}
               >
-                {isWalkin && (
+                {isWalkin ? (
                   <option value="">{t("booking.anyBarber")}</option>
+                ) : (
+                  <option value="" disabled>
+                    -- {t("booking.barber")} --
+                  </option>
                 )}
                 {displayedBarbers.map((b) => {
                   const staffId = "staff_id" in b ? b.staff_id : b.id
@@ -639,14 +723,11 @@ export function BookingModal({
                           ? "Tersedia"
                           : "Available"
                         : language === "id"
-                        ? "Tidak Tersedia"
-                        : "Unavailable"
-                  const isSelected = selectedStaffId === staffId
-                  // Barber remains visible, but disabled for a new assignment if unavailable
-                  const isDisabled = !isAvailable && !isSelected
+                          ? "Tidak Tersedia"
+                          : "Unavailable"
 
                   return (
-                    <option key={staffId} value={staffId} disabled={isDisabled}>
+                    <option key={staffId} value={staffId} disabled={!b.active}>
                       {b.name} — {displayLabel}
                     </option>
                   )
