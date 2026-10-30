@@ -1,11 +1,117 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
 @import 'tailwindcss';
 
+@theme {
+  /* =========================================================================
+     Barvato Design System Tokens (Tailwind v4)
+     ========================================================================= */
+
+  /* --- Colors: Palette --- */
+  --color-charcoal: #1d211f;            /* Primary ink / dark surface (--ink) */
+  --color-charcoal-light: #292e2b;      /* Secondary ink / elevated dark surface (--ink-2) */
+  --color-charcoal-muted: #383e3a;      /* Tertiary ink / dark borders */
+
+  --color-ivory: #f4f1e9;               /* Primary canvas background (--paper) */
+  --color-ivory-warm: #ebe7dc;          /* Secondary surface / card canvas (--paper-2) */
+  --color-ivory-light: #fbfaf6;         /* Pure canvas / light card surface (--white) */
+
+  --color-stone: #d8d3c7;               /* Default border line (--line) */
+  --color-stone-muted: #c8c6bf;         /* Secondary border / switch track */
+
+  --color-muted-text: #74766f;          /* Secondary body text (--muted) */
+  --color-muted-dark: #4b514c;          /* Deep muted / dark portrait background */
+
+  --color-copper: #a95732;              /* Brand copper accent (--copper) */
+  --color-copper-hover: #924726;        /* Primary button hover */
+  --color-copper-soft: #ead6c8;         /* Copper tint / subtle highlight (--copper-soft) */
+
+  --color-forest: #355a48;              /* Success / Active service (--forest) */
+  --color-forest-soft: #e3ebe2;         /* Success badge surface */
+
+  --color-amber: #b77a20;               /* Warning / Waiting queue / Overdue (--amber) */
+  --color-amber-soft: #f3e7cf;          /* Warning badge surface */
+  --color-amber-dark: #835711;          /* Warning text accent */
+
+  --color-danger: #9c443a;              /* Error / Cancelled / Urgent (--danger) */
+  --color-danger-soft: #fdf2f2;         /* Error alert banner surface */
+  --color-danger-line: #f8b4b4;         /* Error alert border */
+
+  /* --- Typography: Font Families --- */
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* --- Typography: Scale --- */
+  --text-2xs: 9px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  /* --- Sizing & Spacing Conveniences --- */
+  --spacing-input-sm: 34px;
+  --spacing-input-md: 38px;
+  --spacing-input-lg: 44px;
+
+  /* --- Borders & Radii --- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* --- Box Shadows --- */
+  --shadow-subtle: 0 1px 2px rgba(29, 33, 31, 0.05);
+  --shadow-card: 0 4px 16px rgba(29, 33, 31, 0.06);
+  --shadow-dropdown: 0 12px 32px rgba(29, 33, 31, 0.16);
+  --shadow-modal: 0 24px 60px rgba(29, 33, 31, 0.22);
+  --shadow-drawer: -18px 0 45px rgba(29, 33, 31, 0.12);
+
+  /* --- Breakpoints --- */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 721px;               /* Matches legacy max-width: 720px breakpoint */
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1101px;              /* Matches legacy max-width: 1100px breakpoint */
+}
+
+/* --- Dedicated Stacking Scale Utilities --- */
+@utility z-dropdown {
+  z-index: 50;
+}
+@utility z-sticky {
+  z-index: 60;
+}
+@utility z-drawer {
+  z-index: 80;
+}
+@utility z-modal {
+  z-index: 100;
+}
+@utility z-popout {
+  z-index: 105;
+}
+@utility z-toast {
+  z-index: 120;
+}
+
+/* =========================================================================
+   Decommissioned Domain Stylesheets (Consolidated to Tailwind CSS v4)
+   - auth.css: Decommissioned (fully migrated to Tailwind tokens & primitives)
+   - overview.css: Decommissioned (fully migrated to Tailwind grid & flex)
+   - settings.css: Decommissioned (fully migrated to Tailwind forms & panels)
+   - team.css: Decommissioned (fully migrated to Tailwind cards & drawers)
+   - money.css: Decommissioned (fully migrated to Tailwind metrics & tables)
+   ========================================================================= */
+
+/* Base Design System Resets & Theme Variables */
 @import './base.css';
+
+/* Layout, Toasts, and Operational Notification System (asserted in tests) */
 @import './layout.css';
-@import './overview.css';
+
+/* Calendar Timeline Positioning & Kinetic Grid System */
 @import './operations.css';
-@import './team.css';
-@import './money.css';
-@import './settings.css';
-@import './auth.css';

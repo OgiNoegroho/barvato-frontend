@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Badge } from "../../components/ui/Badge"
+import { cn } from "../../lib/utils"
+import { Button } from "../../components/ui/Button"
 import { Icon } from "../../components/ui/Icon"
 import { useToast } from "../../hooks/useToast"
 import {
@@ -145,18 +147,42 @@ export function SettingsContent({ section }: SettingsContentProps) {
     }
   }, [section, loadShopDetails])
 
-  // --- Notification Preferences State ---
+  // --- Notification Preferences State & Auto-Save Queue ---
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null)
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(false)
   const [prefsError, setPrefsError] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Refs for tracking queue state and preventing race conditions
+  const notifPrefsRef = useRef<NotificationPreferences | null>(null)
+  const confirmedPrefsRef = useRef<NotificationPreferences | null>(null)
+  const failedAttemptRef = useRef<NotificationPreferences | null>(null)
+  const inFlightRef = useRef<boolean>(false)
+  const hasPendingRef = useRef<boolean>(false)
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clear pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) {
+        clearTimeout(savedTimerRef.current)
+      }
+    }
+  }, [])
 
   const loadNotifPrefs = useCallback(async () => {
     setIsLoadingPrefs(true)
     setPrefsError(null)
+    setSaveStatus("idle")
+    setSaveError(null)
     try {
       const res = await notificationPreferencesApi.get()
       if (res?.preferences) {
         setNotifPrefs(res.preferences)
+        notifPrefsRef.current = res.preferences
+        confirmedPrefsRef.current = res.preferences
+        failedAttemptRef.current = null
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -175,25 +201,107 @@ export function SettingsContent({ section }: SettingsContentProps) {
     }
   }, [section, loadNotifPrefs])
 
-  const updatePreference = async <K extends keyof UpdateNotificationPreferencesRequest>(
+  const processSaveQueue = useCallback(async () => {
+    if (inFlightRef.current) {
+      hasPendingRef.current = true
+      return
+    }
+
+    inFlightRef.current = true
+    setSaveStatus("saving")
+    setSaveError(null)
+
+    while (hasPendingRef.current || inFlightRef.current) {
+      hasPendingRef.current = false
+
+      const targetToSave = notifPrefsRef.current
+      if (!targetToSave) {
+        inFlightRef.current = false
+        break
+      }
+
+      const payload: UpdateNotificationPreferencesRequest = {
+        upcoming_reminder_30m_enabled: targetToSave.upcoming_reminder_30m_enabled,
+        upcoming_reminder_15m_enabled: targetToSave.upcoming_reminder_15m_enabled,
+        overdue_reminder_enabled: targetToSave.overdue_reminder_enabled,
+        overdue_interval_minutes: targetToSave.overdue_interval_minutes,
+        max_overdue_reminders: targetToSave.max_overdue_reminders,
+        excessive_wait_threshold_minutes: targetToSave.excessive_wait_threshold_minutes,
+        queue_alerts_enabled: targetToSave.queue_alerts_enabled,
+        barber_shift_alerts_enabled: targetToSave.barber_shift_alerts_enabled,
+        financial_alerts_enabled: targetToSave.financial_alerts_enabled,
+      }
+
+      try {
+        const res = await notificationPreferencesApi.update(payload)
+        if (res?.preferences) {
+          confirmedPrefsRef.current = res.preferences
+          // If no further edits arrived while saving, sync UI with returned canonical state
+          if (!hasPendingRef.current) {
+            notifPrefsRef.current = res.preferences
+            setNotifPrefs(res.preferences)
+          }
+        }
+        failedAttemptRef.current = null
+      } catch (err: unknown) {
+        // Rollback on failure to the last confirmed server state
+        const revertTarget = confirmedPrefsRef.current
+        failedAttemptRef.current = targetToSave
+        if (revertTarget) {
+          notifPrefsRef.current = revertTarget
+          setNotifPrefs(revertTarget)
+        }
+        hasPendingRef.current = false
+        inFlightRef.current = false
+        setSaveStatus("error")
+        const msg =
+          err instanceof Error
+            ? err.message
+            : language === "id"
+              ? "Gagal menyimpan pengaturan notifikasi"
+              : "Failed to save notification settings"
+        setSaveError(msg)
+        return
+      }
+
+      if (!hasPendingRef.current) {
+        inFlightRef.current = false
+        break
+      }
+    }
+
+    inFlightRef.current = false
+    setSaveStatus("saved")
+    if (savedTimerRef.current) {
+      clearTimeout(savedTimerRef.current)
+    }
+    savedTimerRef.current = setTimeout(() => {
+      setSaveStatus("idle")
+    }, 2500)
+  }, [language])
+
+  const handleRetrySave = useCallback(() => {
+    if (!failedAttemptRef.current || !canManageSettings) return
+    const retryTarget = failedAttemptRef.current
+    notifPrefsRef.current = retryTarget
+    setNotifPrefs(retryTarget)
+    setSaveError(null)
+    void processSaveQueue()
+  }, [canManageSettings, processSaveQueue])
+
+  const updatePreference = <K extends keyof UpdateNotificationPreferencesRequest>(
     key: K,
     val: UpdateNotificationPreferencesRequest[K]
   ) => {
-    if (!notifPrefs || !canManageSettings) return
-    const prev = { ...notifPrefs }
-    const updated = { ...notifPrefs, [key]: val }
-    setNotifPrefs(updated)
-    try {
-      const res = await notificationPreferencesApi.update({ [key]: val })
-      if (res?.preferences) {
-        setNotifPrefs(res.preferences)
-      }
-      showToast(language === "id" ? "Pengaturan notifikasi disimpan" : "Notification settings saved")
-    } catch (err: unknown) {
-      setNotifPrefs(prev)
-      const msg = err instanceof Error ? err.message : "Failed to update notification settings"
-      toast.error(msg)
+    if (!notifPrefsRef.current || !canManageSettings) return
+    if (savedTimerRef.current) {
+      clearTimeout(savedTimerRef.current)
     }
+    const updated: NotificationPreferences = { ...notifPrefsRef.current, [key]: val }
+    notifPrefsRef.current = updated
+    setNotifPrefs(updated)
+    setSaveError(null)
+    void processSaveQueue()
   }
 
   const handleSaveShop = async () => {
@@ -611,42 +719,21 @@ export function SettingsContent({ section }: SettingsContentProps) {
   }
 
   return (
-    <section className="settings-form">
-      <span className="section-index">{section.toUpperCase()}</span>
-      <h2>{title}</h2>
-      <p>{description}</p>
+    <section className="settings-form max-w-3xl space-y-6">
+      <span className="section-index text-[10px] uppercase tracking-wider text-charcoal-muted font-bold block mb-0.5">{section.toUpperCase()}</span>
+      <h2 className="font-serif text-2xl text-charcoal-ink mt-1 mb-1">{title}</h2>
+      <p className="text-charcoal-muted text-xs mb-6">{description}</p>
 
       {/* --- Shop Profile (Activated) --- */}
       {section === "Shop profile" && (
         <div>
           {/* --- Language Selector --- */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "16px 18px",
-              background: "var(--surface-raised, #faf9f7)",
-              border: "1px solid var(--line)",
-              marginBottom: "20px",
-              flexWrap: "wrap",
-              gap: "12px",
-            }}
-          >
+          <div className="flex items-center justify-between p-4 bg-ivory-light border border-stone mb-5 flex-wrap gap-3 rounded-lg">
             <div>
-              <span
-                style={{
-                  fontSize: "10px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "var(--muted)",
-                  display: "block",
-                  marginBottom: "2px",
-                }}
-              >
+              <span className="text-2xs uppercase tracking-wider text-muted-text block mb-0.5">
                 {t("settings.languageTitle")}
               </span>
-              <strong style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>
+              <strong className="text-sm font-semibold text-charcoal block">
                 {t("settings.languageSubtitle")}
               </strong>
             </div>
@@ -655,19 +742,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                 aria-label={t("settings.languageTitle")}
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as "id" | "en")}
-                className="filter-button"
-                style={{
-                  height: "36px",
-                  padding: "0 28px 0 12px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "var(--ink)",
-                  background: "var(--white)",
-                  border: "1px solid var(--line)",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  outline: "none",
-                }}
+                className="h-9 px-3 bg-ivory border border-stone rounded text-xs font-semibold text-charcoal focus:border-copper cursor-pointer outline-none"
               >
                 <option value="id">Bahasa Indonesia</option>
                 <option value="en">English</option>
@@ -677,29 +752,17 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           {shopError && (
             <div
-              className="login-error-alert"
+              className="login-error-alert mb-4 flex items-center justify-between p-3 border border-danger/30 bg-danger-soft text-danger text-xs rounded-sm"
               role="alert"
-              style={{
-                marginBottom: "16px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 14px",
-                border: "1px solid var(--danger)",
-                background: "rgba(207, 60, 60, 0.08)",
-                color: "var(--red, #cf3c3c)",
-                fontSize: "11px",
-              }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="flex items-center gap-2">
                 <Icon name="bell" size={16} />
                 <span>{shopError}</span>
               </div>
               <button
                 type="button"
-                className="text-button"
+                className="text-xs underline text-inherit cursor-pointer bg-transparent border-0 p-0 font-medium"
                 onClick={loadShopDetails}
-                style={{ fontSize: "11px", textDecoration: "underline", color: "inherit", cursor: "pointer" }}
               >
                 Retry
               </button>
@@ -707,117 +770,114 @@ export function SettingsContent({ section }: SettingsContentProps) {
           )}
 
           {isLoadingShop ? (
-            <div style={{ padding: "36px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+            <div className="py-9 text-center text-muted-text text-xs">
               Loading shop profile from server...
             </div>
           ) : !shopDetails ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+            <div className="py-8 text-center text-muted-text text-xs">
               No shop profile available.
             </div>
           ) : (
             <div>
               {!canManageSettings && (
-                <div
-                  style={{
-                    marginBottom: "20px",
-                    padding: "12px 14px",
-                    background: "var(--surface-raised, #f6f5f3)",
-                    border: "1px solid var(--line)",
-                    fontSize: "11px",
-                    color: "var(--muted)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
+                <div className="mb-5 p-3.5 bg-ivory-warm/60 border border-stone text-xs text-muted-text flex items-center gap-2 rounded-sm">
                   <Icon name="bell" size={14} />
                   <span>
                     Shop profile details can only be modified by the shop owner. You are signed in as a{" "}
-                    <strong style={{ textTransform: "capitalize", color: "var(--ink)" }}>{currentShop?.role || "staff member"}</strong> (read-only mode).
+                    <strong className="capitalize text-charcoal font-semibold">{currentShop?.role || "staff member"}</strong> (read-only mode).
                   </span>
                 </div>
               )}
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "14px 16px",
-                  background: "var(--surface-raised, #faf9f7)",
-                  border: "1px solid var(--line)",
-                  marginBottom: "20px",
-                }}
-              >
+              <div className="flex items-center gap-3 p-4 bg-ivory-light border border-stone mb-5 rounded-lg">
                 <div>
-                  <span style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", display: "block" }}>
+                  <span className="text-2xs uppercase tracking-wider text-muted-text block">
                     Tenant Identity
                   </span>
-                  <strong style={{ fontSize: "13px", color: "var(--ink)" }}>
+                  <strong className="text-sm font-semibold text-charcoal">
                     Shop #{shopDetails.id}
                   </strong>
                 </div>
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+                <div className="ml-auto flex items-center gap-2">
                   <Badge tone={shopDetails.status === "active" ? "success" : "neutral"}>
                     {shopDetails.status.toUpperCase()}
                   </Badge>
                   {shopDetails.created_at && (
-                    <span style={{ fontSize: "10px", color: "var(--muted)" }}>
+                    <span className="text-2xs text-muted-text">
                       Established {new Date(shopDetails.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="form-grid">
-                <label className="full">
-                  Barbershop Business Name *
-                  <input
-                    type="text"
-                    value={shopName}
-                    disabled={!canManageSettings || isSavingShop}
-                    onChange={(e) => {
-                      setShopName(e.target.value)
-                      setIsShopDirty(true)
-                    }}
-                    placeholder="e.g. Batavia Barbershop"
-                    required
-                  />
-                </label>
+              <div className="bg-ivory-light border border-stone rounded-lg p-5 sm:p-6 mb-6 shadow-subtle">
+                <h3 className="font-serif text-lg text-charcoal mb-1">
+                  {language === "id" ? "Detail Profil Barbershop" : "Barbershop Details"}
+                </h3>
+                <p className="text-xs text-muted-text mb-4">
+                  {language === "id"
+                    ? "Konfigurasi utama toko dan lokalisasi zona waktu operasional."
+                    : "Core shop configuration and operational timezone localization."}
+                </p>
 
-                <label>
-                  Operating Timezone *
-                  <select
-                    value={shopTimezone}
-                    disabled={!canManageSettings || isSavingShop}
-                    onChange={(e) => {
-                      setShopTimezone(e.target.value)
-                      setIsShopDirty(true)
-                    }}
-                  >
-                    <option value="Asia/Jakarta">Asia/Jakarta (WIB · UTC+7 — Java, Sumatra)</option>
-                    <option value="Asia/Makassar">Asia/Makassar (WITA · UTC+8 — Bali, Sulawesi)</option>
-                    <option value="Asia/Jayapura">Asia/Jayapura (WIT · UTC+9 — Maluku, Papua)</option>
-                    <option value="Asia/Singapore">Asia/Singapore (SGT · UTC+8)</option>
-                    <option value="UTC">UTC (Coordinated Universal Time)</option>
-                    <option value="America/New_York">America/New_York (Eastern Time)</option>
-                    <option value="America/Chicago">America/Chicago (Central Time)</option>
-                    <option value="America/Denver">America/Denver (Mountain Time)</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
-                    <option value="Europe/London">Europe/London (GMT/BST)</option>
-                  </select>
-                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="col-span-full">
+                    <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                      Barbershop Business Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={shopName}
+                      disabled={!canManageSettings || isSavingShop}
+                      onChange={(e) => {
+                        setShopName(e.target.value)
+                        setIsShopDirty(true)
+                      }}
+                      placeholder="e.g. Batavia Barbershop"
+                      required
+                      className="w-full h-9 px-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    />
+                  </div>
 
-                <label>
-                  Subscription Status
-                  <input
-                    type="text"
-                    value={shopDetails.status.toUpperCase()}
-                    disabled
-                    readOnly
-                    style={{ background: "var(--surface-raised, #f6f5f3)", cursor: "not-allowed" }}
-                  />
-                </label>
+                  <div>
+                    <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                      Operating Timezone *
+                    </label>
+                    <select
+                      value={shopTimezone}
+                      disabled={!canManageSettings || isSavingShop}
+                      onChange={(e) => {
+                        setShopTimezone(e.target.value)
+                        setIsShopDirty(true)
+                      }}
+                      className="w-full h-9 px-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <option value="Asia/Jakarta">Asia/Jakarta (WIB · UTC+7 — Java, Sumatra)</option>
+                      <option value="Asia/Makassar">Asia/Makassar (WITA · UTC+8 — Bali, Sulawesi)</option>
+                      <option value="Asia/Jayapura">Asia/Jayapura (WIT · UTC+9 — Maluku, Papua)</option>
+                      <option value="Asia/Singapore">Asia/Singapore (SGT · UTC+8)</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="America/New_York">America/New_York (Eastern Time)</option>
+                      <option value="America/Chicago">America/Chicago (Central Time)</option>
+                      <option value="America/Denver">America/Denver (Mountain Time)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
+                      <option value="Europe/London">Europe/London (GMT/BST)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                      Subscription Status
+                    </label>
+                    <input
+                      type="text"
+                      value={shopDetails.status.toUpperCase()}
+                      disabled
+                      readOnly
+                      className="w-full h-9 px-3 bg-stone/20 border border-stone rounded-sm text-xs font-sans text-muted-text cursor-not-allowed outline-none"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -829,9 +889,8 @@ export function SettingsContent({ section }: SettingsContentProps) {
         <div>
           {hoursError && (
             <div
-              className="login-error-alert"
+              className="login-error-alert mb-4 flex items-center gap-2 p-3 border border-danger/30 bg-danger-soft text-danger text-xs rounded-sm"
               role="alert"
-              style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
             >
               <Icon name="bell" size={16} />
               <span>{hoursError}</span>
@@ -839,101 +898,122 @@ export function SettingsContent({ section }: SettingsContentProps) {
           )}
 
           {isLoadingHours ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+            <div className="py-8 text-center text-muted-text text-xs">
               {language === "id" ? "Memuat jam operasional dari server..." : "Loading operating hours from server..."}
             </div>
           ) : (
-            <div className="hours-list">
-              {WEEKDAYS.map((wd) => {
-                const hour = hoursMap[wd.day] || {
-                  day_of_week: wd.day,
-                  is_open: wd.day !== 0,
-                  open_time: "09:00:00",
-                  close_time: "21:00:00",
-                }
-                const dayLabel = language === "id" ? wd.labelId : wd.labelEn
+            <div className="bg-ivory-light border border-stone rounded-lg p-5 sm:p-6 mb-6 shadow-subtle">
+              <h3 className="font-serif text-lg text-charcoal mb-1">
+                {t("settings.businessHoursTitle")}
+              </h3>
+              <p className="text-xs text-muted-text mb-4">
+                {t("settings.businessHoursDesc")}
+              </p>
 
-                return (
-                  <div key={wd.day}>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={hour.is_open}
-                        disabled={!canManageSchedule}
-                        onChange={(e) => handleToggleDay(wd.day, e.target.checked)}
-                      />
-                      <i />
-                    </label>
-                    <strong>{dayLabel}</strong>
-                    {hour.is_open ? (
-                      <>
+              <div className="divide-y divide-stone border-y border-stone mb-5">
+                {WEEKDAYS.map((wd) => {
+                  const hour = hoursMap[wd.day] || {
+                    day_of_week: wd.day,
+                    is_open: wd.day !== 0,
+                    open_time: "09:00:00",
+                    close_time: "21:00:00",
+                  }
+                  const dayLabel = language === "id" ? wd.labelId : wd.labelEn
+                  const isOpen = hour.is_open
+
+                  return (
+                    <div
+                      key={wd.day}
+                      className="flex items-center justify-between gap-3 py-3 px-1 min-h-[52px] text-xs"
+                    >
+                      {/* LEFT: Switch & Day name */}
+                      <div className="flex items-center gap-3 w-32 sm:w-44 shrink-0">
+                        <label className="switch shrink-0" aria-label={`Toggle ${dayLabel}`}>
+                          <input
+                            type="checkbox"
+                            id={`day-toggle-${wd.day}`}
+                            checked={isOpen}
+                            disabled={!canManageSchedule}
+                            onChange={(e) => handleToggleDay(wd.day, e.target.checked)}
+                          />
+                          <i />
+                        </label>
+                        <label
+                          htmlFor={`day-toggle-${wd.day}`}
+                          className="text-xs font-semibold text-charcoal cursor-pointer select-none"
+                        >
+                          {dayLabel}
+                        </label>
+                      </div>
+
+                      {/* RIGHT: Opening & Closing times aligned vertically */}
+                      <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
                         <input
                           type="time"
-                          disabled={!canManageSchedule}
+                          aria-label={`${dayLabel} ${language === "id" ? "Jam buka" : "Opening time"}`}
+                          disabled={!canManageSchedule || !isOpen}
                           value={formatTimeForInput(hour.open_time, "09:00")}
                           onChange={(e) => handleTimeChange(wd.day, "open_time", e.target.value)}
+                          className="w-[95px] sm:w-[120px] h-8.5 px-2 bg-ivory border border-stone rounded-sm text-xs font-mono text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all disabled:opacity-40 disabled:bg-stone/20 disabled:cursor-not-allowed text-center"
                         />
-                        <span className="hours-sep">{language === "id" ? "sampai" : "to"}</span>
+                        <span className="text-2xs uppercase tracking-wider text-muted-text w-8 sm:w-10 text-center shrink-0">
+                          {language === "id" ? "sampai" : "to"}
+                        </span>
                         <input
                           type="time"
-                          disabled={!canManageSchedule}
+                          aria-label={`${dayLabel} ${language === "id" ? "Jam tutup" : "Closing time"}`}
+                          disabled={!canManageSchedule || !isOpen}
                           value={formatTimeForInput(hour.close_time, "21:00")}
                           onChange={(e) => handleTimeChange(wd.day, "close_time", e.target.value)}
+                          className="w-[95px] sm:w-[120px] h-8.5 px-2 bg-ivory border border-stone rounded-sm text-xs font-mono text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all disabled:opacity-40 disabled:bg-stone/20 disabled:cursor-not-allowed text-center"
                         />
-                      </>
-                    ) : (
-                      <em style={{ gridColumn: "3 / -1" }}>{t("settings.dayClosed")}</em>
-                    )}
-                  </div>
-                )
-              })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {canManageSchedule && (
+                <div className="pt-1">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveHours}
+                    disabled={isSavingHours || !isHoursDirty}
+                    isLoading={isSavingHours}
+                  >
+                    {isSavingHours
+                      ? language === "id"
+                        ? "Menyimpan jam operasional..."
+                        : "Saving hours..."
+                      : isHoursDirty
+                        ? language === "id"
+                          ? "Simpan perubahan *"
+                          : "Save changes *"
+                        : language === "id"
+                          ? "Jam operasional tersimpan"
+                          : "Hours saved"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
-          {canManageSchedule && (
-            <button
-              type="button"
-              className="primary-button settings-save"
-              style={{ marginTop: "16px" }}
-              onClick={handleSaveHours}
-              disabled={isSavingHours || !isHoursDirty}
-            >
-              {isSavingHours
-                ? language === "id"
-                  ? "Menyimpan jam operasional..."
-                  : "Saving hours..."
-                : isHoursDirty
-                  ? language === "id"
-                    ? "Simpan perubahan *"
-                    : "Save changes *"
-                  : language === "id"
-                    ? "Jam operasional tersimpan"
-                    : "Hours saved"}
-            </button>
-          )}
-
           {/* --- Shop Closures & Special Operating Hours --- */}
-          <div
-            style={{
-              marginTop: "36px",
-              paddingTop: "28px",
-              borderTop: "1px solid var(--line)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+          <div className="mt-9 pt-7 border-t border-stone">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
               <div>
-                <h3 style={{ margin: "0 0 4px", fontSize: "15px", color: "var(--ink)" }}>
+                <h3 className="m-0 mb-1 text-sm font-semibold text-charcoal">
                   {t("closures.title")}
                 </h3>
-                <p style={{ margin: 0, fontSize: "11px", color: "var(--muted)" }}>
+                <p className="m-0 text-xs text-muted-text">
                   {t("closures.subtitle")}
                 </p>
               </div>
               {canManageSchedule && !isClosureFormOpen && (
                 <button
                   type="button"
-                  className="filter-button"
-                  style={{ fontWeight: 600 }}
+                  className="filter-button font-semibold"
                   onClick={openCreateClosure}
                 >
                   {t("closures.addButton")}
@@ -943,19 +1023,8 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
             {closureError && (
               <div
-                className="login-error-alert"
+                className="login-error-alert mb-3.5 p-3 border border-danger/30 bg-danger-soft text-danger text-xs flex items-center gap-2 rounded-sm"
                 role="alert"
-                style={{
-                  marginBottom: "14px",
-                  padding: "10px 14px",
-                  border: "1px solid var(--danger)",
-                  background: "rgba(207, 60, 60, 0.08)",
-                  color: "var(--red, #cf3c3c)",
-                  fontSize: "11px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
               >
                 <Icon name="bell" size={14} />
                 <span>{closureError}</span>
@@ -963,19 +1032,12 @@ export function SettingsContent({ section }: SettingsContentProps) {
             )}
 
             {isClosureFormOpen && canManageSchedule && (
-              <div
-                style={{
-                  padding: "16px",
-                  background: "var(--surface-raised, #faf9f7)",
-                  border: "1px solid var(--line)",
-                  marginBottom: "18px",
-                }}
-              >
-                <strong style={{ display: "block", fontSize: "12px", marginBottom: "12px", color: "var(--ink)" }}>
+              <div className="p-4 bg-ivory-light border border-stone mb-4.5 rounded-lg">
+                <strong className="block text-xs font-semibold mb-3 text-charcoal">
                   {editingClosure ? t("closures.editTitle") : t("closures.createTitle")}
                 </strong>
 
-                <div className="form-grid">
+                <div className="form-grid grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                   <label>
                     {t("closures.startDate")} *
                     <input
@@ -1057,22 +1119,15 @@ export function SettingsContent({ section }: SettingsContentProps) {
                 {closureConflicts && (
                   <div
                     role="alert"
-                    style={{
-                      marginTop: "14px",
-                      padding: "12px 14px",
-                      border: "1px solid var(--red, #cf3c3c)",
-                      background: "rgba(207, 60, 60, 0.08)",
-                      color: "var(--ink)",
-                      fontSize: "11px",
-                    }}
+                    className="mt-3.5 p-3.5 border border-danger/40 bg-danger-soft text-charcoal text-xs rounded-sm"
                   >
-                    <strong style={{ color: "var(--red, #cf3c3c)", display: "block", marginBottom: "4px" }}>
+                    <strong className="text-danger block mb-1 font-semibold">
                       {t("closures.conflictWarningTitle")}
                     </strong>
-                    <p style={{ margin: "0 0 8px", color: "var(--muted)" }}>
+                    <p className="m-0 mb-2 text-muted-text">
                       {t("closures.conflictWarningDesc")}
                     </p>
-                    <ul style={{ margin: "0 0 10px", paddingLeft: "18px" }}>
+                    <ul className="m-0 mb-2.5 pl-4.5 list-disc text-xs space-y-1">
                       {(closureConflicts.affected_appointments || []).map((a) => (
                         <li key={`appt-${a.id}`}>
                           <strong>{a.customer_name}</strong> — {a.service_name} ({a.staff_name},{" "}
@@ -1090,11 +1145,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
                         </li>
                       ))}
                     </ul>
-                    <div style={{ display: "flex", gap: "8px" }}>
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        className="primary-button"
-                        style={{ background: "var(--red, #cf3c3c)", borderColor: "var(--red, #cf3c3c)" }}
+                        className="primary-button bg-danger border-danger hover:bg-danger/90"
                         disabled={isSavingClosure}
                         onClick={() => handleSaveClosure(true)}
                       >
@@ -1112,7 +1166,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                 )}
 
                 {!closureConflicts && (
-                  <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+                  <div className="flex gap-2 mt-3.5">
                     <button
                       type="button"
                       className="primary-button"
@@ -1139,23 +1193,15 @@ export function SettingsContent({ section }: SettingsContentProps) {
             )}
 
             {isLoadingClosures ? (
-              <div style={{ padding: "18px 0", fontSize: "11px", color: "var(--muted)" }}>
+              <div className="py-4.5 text-xs text-muted-text">
                 {t("common.loading")}
               </div>
             ) : closures.length === 0 ? (
-              <div
-                style={{
-                  padding: "20px 14px",
-                  border: "1px dashed var(--line)",
-                  textAlign: "center",
-                  color: "var(--muted)",
-                  fontSize: "11px",
-                }}
-              >
+              <div className="p-5 border border-dashed border-stone text-center text-muted-text text-xs rounded-sm">
                 {t("closures.empty")}
               </div>
             ) : (
-              <div className="service-settings">
+              <div className="service-settings border-t border-charcoal divide-y divide-stone mb-6">
                 {closures.map((c) => {
                   const dateLabel =
                     c.start_date === c.end_date
@@ -1164,16 +1210,14 @@ export function SettingsContent({ section }: SettingsContentProps) {
                   return (
                     <div
                       key={c.id}
-                      style={{
-                        borderLeft: c.is_closed
-                          ? "3px solid var(--red, #cf3c3c)"
-                          : "3px solid var(--amber, #b7791f)",
-                        paddingLeft: "10px",
-                      }}
+                      className={cn(
+                        "flex items-center justify-between py-3.5 pl-2.5 gap-3 border-l-3",
+                        c.is_closed ? "border-danger" : "border-amber"
+                      )}
                     >
-                      <span>
-                        <strong>{c.reason || (c.is_closed ? t("closures.badgeClosed") : t("closures.title"))}</strong>
-                        <small>{dateLabel}</small>
+                      <span className="grow min-w-0">
+                        <strong className="block text-xs font-semibold text-charcoal">{c.reason || (c.is_closed ? t("closures.badgeClosed") : t("closures.title"))}</strong>
+                        <small className="block text-2xs text-muted-text">{dateLabel}</small>
                       </span>
                       <Badge tone={c.is_closed ? "danger" : "warning"}>
                         {c.is_closed
@@ -1184,7 +1228,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                             })}
                       </Badge>
                       {canManageSchedule && (
-                        <div style={{ display: "flex", gap: "6px" }}>
+                        <div className="flex gap-1.5 shrink-0">
                           <button
                             type="button"
                             className="filter-button"
@@ -1194,8 +1238,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
                           </button>
                           <button
                             type="button"
-                            className="filter-button"
-                            style={{ color: "var(--red, #cf3c3c)" }}
+                            className="filter-button text-danger hover:border-danger"
                             onClick={() => handleDeleteClosure(c.id)}
                           >
                             {t("common.delete")}
@@ -1213,19 +1256,19 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
       {/* --- Services & Pricing (Integrated) --- */}
       {section === "Services & pricing" && (
-        <div className="service-settings">
+        <div className="service-settings border-t border-charcoal divide-y divide-stone mb-6">
           {servicesError && (
             <div
-              className="login-error-alert"
+              className="login-error-alert mb-4 flex items-center justify-between p-3 border border-danger/30 bg-danger-soft text-danger text-xs rounded-sm"
               role="alert"
-              style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
             >
-              <Icon name="bell" size={16} />
-              <span>{servicesError}</span>
+              <div className="flex items-center gap-2">
+                <Icon name="bell" size={16} />
+                <span>{servicesError}</span>
+              </div>
               <button
                 type="button"
-                className="filter-button"
-                style={{ marginLeft: "auto", fontSize: "10px" }}
+                className="filter-button text-xs ml-auto"
                 onClick={loadServices}
               >
                 Retry
@@ -1234,30 +1277,24 @@ export function SettingsContent({ section }: SettingsContentProps) {
           )}
 
           {isLoadingServices ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+            <div className="py-8 text-center text-muted-text text-xs">
               {language === "id" ? "Memuat katalog layanan dari server..." : "Loading service catalog from server..."}
             </div>
           ) : services.length === 0 && !servicesError ? (
-            <div
-              style={{
-                padding: "36px 16px",
-                textAlign: "center",
-                borderBottom: "1px solid var(--line)",
-              }}
-            >
-              <p style={{ color: "var(--muted)", margin: "0 0 12px", fontSize: "12px" }}>
+            <div className="py-9 px-4 text-center border-b border-stone">
+              <p className="text-muted-text m-0 mb-3 text-xs">
                 {t("settings.servicesEmpty")}
               </p>
-              <p style={{ color: "var(--muted)", margin: "0 0 16px", fontSize: "10px" }}>
+              <p className="text-muted-text m-0 mb-4 text-2xs">
                 {t("settings.servicesEmptyDesc")}
               </p>
             </div>
           ) : (
             services.map((srv) => (
-              <div key={srv.id}>
-                <span>
-                  <strong>{srv.name}</strong>
-                  <small>
+              <div key={srv.id} className="flex items-center justify-between py-3.5 gap-3 border-b border-stone">
+                <span className="grow min-w-0">
+                  <strong className="block text-xs font-semibold text-charcoal truncate">{srv.name}</strong>
+                  <small className="block text-2xs text-muted-text truncate">
                     {srv.active
                       ? language === "id"
                         ? "Tersedia untuk reservasi online & datang langsung"
@@ -1267,10 +1304,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
                         : "Inactive (hidden from booking and queue)"}
                   </small>
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--muted)", minWidth: "55px" }}>
+                <span className="text-xs text-muted-text min-w-[55px] text-right">
                   {srv.duration_min} {t("common.minutes")}
                 </span>
-                <strong style={{ fontSize: "11px", minWidth: "90px" }}>
+                <strong className="text-xs font-semibold text-charcoal min-w-[90px] text-right">
                   {formatRupiah(srv.price)}
                 </strong>
                 <Badge tone={srv.active ? "success" : "neutral"}>
@@ -1294,8 +1331,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           <button
             type="button"
-            className="wide-button"
-            style={{ marginTop: "16px" }}
+            className="wide-button mt-4"
             onClick={() => {
               setEditingService(null)
               setIsServiceModalOpen(true)
@@ -1320,19 +1356,19 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
       {/* --- Staff & Permissions (Integrated) --- */}
       {section === "Staff & permissions" && (
-        <div className="service-settings">
+        <div className="service-settings border-t border-charcoal divide-y divide-stone mb-6">
           {staffError && (
             <div
-              className="login-error-alert"
+              className="login-error-alert mb-4 flex items-center justify-between p-3 border border-danger/30 bg-danger-soft text-danger text-xs rounded-sm"
               role="alert"
-              style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
             >
-              <Icon name="bell" size={16} />
-              <span>{staffError}</span>
+              <div className="flex items-center gap-2">
+                <Icon name="bell" size={16} />
+                <span>{staffError}</span>
+              </div>
               <button
                 type="button"
-                className="filter-button"
-                style={{ marginLeft: "auto", fontSize: "10px" }}
+                className="filter-button text-xs ml-auto"
                 onClick={loadStaff}
               >
                 Retry
@@ -1341,12 +1377,12 @@ export function SettingsContent({ section }: SettingsContentProps) {
           )}
 
           {isLoadingStaff ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+            <div className="py-8 text-center text-muted-text text-xs">
               {t("settings.staffLoading")}
             </div>
           ) : staffList.length === 0 && !staffError ? (
-            <div style={{ padding: "36px 16px", textAlign: "center", borderBottom: "1px solid var(--line)" }}>
-              <p style={{ color: "var(--muted)", margin: "0 0 12px", fontSize: "12px" }}>
+            <div className="py-9 px-4 text-center border-b border-stone">
+              <p className="text-muted-text m-0 mb-3 text-xs">
                 {t("settings.staffEmpty")}
               </p>
             </div>
@@ -1361,19 +1397,19 @@ export function SettingsContent({ section }: SettingsContentProps) {
                     : "Standard rate"
 
               return (
-                <div key={st.id}>
-                  <span className="client-cell">
+                <div key={st.id} className="flex items-center justify-between py-3.5 gap-3 border-b border-stone">
+                  <span className="client-cell flex items-center gap-2.5 grow min-w-0">
                     <span className="avatar small">{initials}</span>
-                    <span>
-                      <strong>{st.name}</strong>
-                      <small>
+                    <span className="min-w-0">
+                      <strong className="block text-xs font-semibold text-charcoal truncate">{st.name}</strong>
+                      <small className="block text-2xs text-muted-text truncate">
                         {st.contact || (st.active
                           ? language === "id" ? "Akun aktif" : "Active account"
                           : language === "id" ? "Akun nonaktif" : "Inactive account")}
                       </small>
                     </span>
                   </span>
-                  <span style={{ fontSize: "11px", color: "var(--muted)" }}>{rateLabel}</span>
+                  <span className="text-xs text-muted-text min-w-[100px] text-right">{rateLabel}</span>
                   <Badge tone={st.active ? "success" : "neutral"}>
                     {st.active ? t("common.active") : t("common.inactive")}
                   </Badge>
@@ -1394,8 +1430,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
           <button
             type="button"
-            className="wide-button"
-            style={{ marginTop: "16px" }}
+            className="wide-button mt-4"
             onClick={() => {
               setStaffToEdit(null)
               setIsStaffModalOpen(true)
@@ -1420,234 +1455,332 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
       {/* --- Notifications (Configurable Preferences) --- */}
       {section === "Notifications" && (
-        <div className="notification-settings">
-          {isLoadingPrefs ? (
-            <div style={{ padding: "30px", textAlign: "center", color: "var(--muted)" }}>
-              {t("notifications.loading")}
+        <div className="bg-ivory-light border border-stone rounded-lg p-5 sm:p-6 mb-6 shadow-subtle">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-1">
+            <h3 className="font-serif text-lg text-charcoal">
+              {t("settings.sectionNotifications")}
+            </h3>
+            {/* Subtle auto-save status feedback */}
+            <div className="flex items-center gap-2 text-xs min-h-[1.5rem]" aria-live="polite">
+              {saveStatus === "saving" && (
+                <span className="inline-flex items-center gap-1.5 text-muted-text font-medium animate-pulse">
+                  <span className="inline-block w-2 h-2 rounded-full bg-copper animate-ping" />
+                  {language === "id" ? "Menyimpan..." : "Saving..."}
+                </span>
+              )}
+              {saveStatus === "saved" && (
+                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium transition-opacity duration-300">
+                  <svg className="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 16 16" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {language === "id" ? "Tersimpan" : "Saved"}
+                </span>
+              )}
+              {saveStatus === "error" && (
+                <span className="inline-flex items-center gap-1 text-danger font-medium">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {language === "id" ? "Gagal menyimpan" : "Save failed"}
+                </span>
+              )}
             </div>
-          ) : prefsError ? (
-            <div style={{ padding: "20px", color: "var(--red)" }}>
-              <p>{prefsError}</p>
+          </div>
+          <p className="text-xs text-muted-text mb-4">
+            {language === "id"
+              ? "Atur preferensi pengingat otomatis dan peringatan operasional barbershop."
+              : "Configure automated reminder preferences and operational barbershop alerts."}
+          </p>
+
+          {/* Error Banner with Retry */}
+          {saveStatus === "error" && saveError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-danger flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg className="w-4 h-4 shrink-0 text-danger" viewBox="0 0 16 16" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span className="truncate">{saveError}</span>
+              </div>
               <button
                 type="button"
-                className="filter-button"
-                onClick={() => void loadNotifPrefs()}
-                style={{ marginTop: "10px" }}
+                onClick={handleRetrySave}
+                className="shrink-0 px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider text-charcoal bg-ivory border border-stone rounded hover:bg-stone/20 cursor-pointer transition-colors"
               >
                 {t("common.retry")}
               </button>
             </div>
-          ) : notifPrefs ? (
-            <>
-              {/* 1. Upcoming 30m */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Pengingat Janji Temu 30 Menit"
-                      : "30-Minute Upcoming Appointment Reminder"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Kirim notifikasi 30 menit sebelum jadwal temu dimulai."
-                      : "Send an alert 30 minutes before scheduled start time."}
-                  </small>
-                </span>
-                <span className="switch">
-                  <input
-                    type="checkbox"
-                    checked={notifPrefs.upcoming_reminder_30m_enabled}
-                    disabled={!canManageSettings}
-                    onChange={(e) => updatePreference("upcoming_reminder_30m_enabled", e.target.checked)}
-                  />
-                  <i />
-                </span>
-              </label>
+          )}
 
-              {/* 2. Upcoming 15m */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Pengingat Janji Temu 15 Menit"
-                      : "15-Minute Upcoming Appointment Reminder"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Kirim notifikasi 15 menit sebelum jadwal temu dimulai."
-                      : "Send an alert 15 minutes before scheduled start time."}
-                  </small>
-                </span>
-                <span className="switch">
-                  <input
-                    type="checkbox"
-                    checked={notifPrefs.upcoming_reminder_15m_enabled}
-                    disabled={!canManageSettings}
-                    onChange={(e) => updatePreference("upcoming_reminder_15m_enabled", e.target.checked)}
-                  />
-                  <i />
-                </span>
-              </label>
-
-              {/* 3. Overdue Detection */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Peringatan Janji Temu Terlambat (Overdue)"
-                      : "Overdue Appointment Alerts"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Beri tahu jika janji temu belum check-in atau dimulai setelah jadwalnya lewat."
-                      : "Alert if an appointment has not checked in or started after scheduled start."}
-                  </small>
-                </span>
-                <div className="notif-setting-action">
-                  {notifPrefs.overdue_reminder_enabled && (
-                    <select
-                      className="notif-setting-select"
-                      value={notifPrefs.overdue_interval_minutes}
-                      disabled={!canManageSettings}
-                      onChange={(e) =>
-                        updatePreference("overdue_interval_minutes", Number(e.target.value))
-                      }
-                      title="Interval pengingat keterlambatan"
+          <div className="divide-y divide-stone border-y border-stone">
+            {isLoadingPrefs ? (
+              <div className="py-7.5 text-center text-muted-text text-xs">
+                {t("notifications.loading")}
+              </div>
+            ) : prefsError ? (
+              <div className="p-5 text-danger text-xs">
+                <p>{prefsError}</p>
+                <button
+                  type="button"
+                  className="filter-button mt-2.5 cursor-pointer"
+                  onClick={() => void loadNotifPrefs()}
+                >
+                  {t("common.retry")}
+                </button>
+              </div>
+            ) : notifPrefs ? (
+              <>
+                {/* 1. Upcoming 30m */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-upcoming-30m"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
                     >
-                      <option value={5}>Setiap 5 menit / Every 5m</option>
-                      <option value={10}>Setiap 10 menit / Every 10m</option>
-                      <option value={15}>Setiap 15 menit / Every 15m</option>
-                      <option value={30}>Setiap 30 menit / Every 30m</option>
-                    </select>
-                  )}
-                  <span className="switch">
+                      {language === "id"
+                        ? "Pengingat Janji Temu 30 Menit"
+                        : "30-Minute Upcoming Appointment Reminder"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Kirim notifikasi 30 menit sebelum jadwal temu dimulai."
+                        : "Send an alert 30 minutes before scheduled start time."}
+                    </small>
+                  </div>
+                  <label htmlFor="pref-upcoming-30m" className="switch shrink-0 cursor-pointer">
                     <input
+                      id="pref-upcoming-30m"
+                      name="upcoming_reminder_30m_enabled"
                       type="checkbox"
-                      checked={notifPrefs.overdue_reminder_enabled}
+                      checked={notifPrefs.upcoming_reminder_30m_enabled}
                       disabled={!canManageSettings}
-                      onChange={(e) => updatePreference("overdue_reminder_enabled", e.target.checked)}
+                      onChange={(e) => updatePreference("upcoming_reminder_30m_enabled", e.target.checked)}
                     />
                     <i />
-                  </span>
+                  </label>
                 </div>
-              </label>
 
-              {/* 4. Excessive Queue Wait */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Peringatan Waktu Tunggu Antrean Berlebih"
-                      : "Excessive Queue Wait Alert"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Kirim notifikasi jika antrean walk-in menunggu melebihi batas waktu toleransi."
-                      : "Send an alert if walk-in clients wait longer than the designated threshold."}
-                  </small>
-                </span>
-                <div className="notif-setting-action">
-                  {notifPrefs.queue_alerts_enabled && (
-                    <select
-                      className="notif-setting-select"
-                      value={notifPrefs.excessive_wait_threshold_minutes}
-                      disabled={!canManageSettings}
-                      onChange={(e) =>
-                        updatePreference(
-                          "excessive_wait_threshold_minutes",
-                          Number(e.target.value)
-                        )
-                      }
-                      title="Batas waktu tunggu antrean"
+                {/* 2. Upcoming 15m */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-upcoming-15m"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
                     >
-                      <option value={15}>15 menit / 15m</option>
-                      <option value={25}>25 menit / 25m</option>
-                      <option value={30}>30 menit / 30m</option>
-                      <option value={45}>45 menit / 45m</option>
-                      <option value={60}>60 menit / 60m</option>
-                    </select>
-                  )}
-                  <span className="switch">
+                      {language === "id"
+                        ? "Pengingat Janji Temu 15 Menit"
+                        : "15-Minute Upcoming Appointment Reminder"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Kirim notifikasi 15 menit sebelum jadwal temu dimulai."
+                        : "Send an alert 15 minutes before scheduled start time."}
+                    </small>
+                  </div>
+                  <label htmlFor="pref-upcoming-15m" className="switch shrink-0 cursor-pointer">
                     <input
+                      id="pref-upcoming-15m"
+                      name="upcoming_reminder_15m_enabled"
                       type="checkbox"
-                      checked={notifPrefs.queue_alerts_enabled}
+                      checked={notifPrefs.upcoming_reminder_15m_enabled}
+                      disabled={!canManageSettings}
+                      onChange={(e) => updatePreference("upcoming_reminder_15m_enabled", e.target.checked)}
+                    />
+                    <i />
+                  </label>
+                </div>
+
+                {/* 3. Overdue Detection */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-overdue"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
+                    >
+                      {language === "id"
+                        ? "Peringatan Janji Temu Terlambat (Overdue)"
+                        : "Overdue Appointment Alerts"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Beri tahu jika janji temu belum check-in atau dimulai setelah jadwalnya lewat."
+                        : "Alert if an appointment has not checked in or started after scheduled start."}
+                    </small>
+                  </div>
+                  <div className="notif-setting-action flex items-center gap-3 shrink-0">
+                    {notifPrefs.overdue_reminder_enabled && (
+                      <select
+                        aria-label="Interval pengingat keterlambatan"
+                        className="notif-setting-select h-8.5 border border-stone bg-ivory px-2.5 text-xs rounded-sm focus:border-copper focus:ring-1 focus:ring-copper outline-none text-charcoal cursor-pointer"
+                        value={notifPrefs.overdue_interval_minutes}
+                        disabled={!canManageSettings}
+                        onChange={(e) =>
+                          updatePreference("overdue_interval_minutes", Number(e.target.value))
+                        }
+                      >
+                        <option value={5}>Setiap 5 menit / Every 5m</option>
+                        <option value={10}>Setiap 10 menit / Every 10m</option>
+                        <option value={15}>Setiap 15 menit / Every 15m</option>
+                        <option value={30}>Setiap 30 menit / Every 30m</option>
+                      </select>
+                    )}
+                    <label htmlFor="pref-overdue" className="switch shrink-0 cursor-pointer">
+                      <input
+                        id="pref-overdue"
+                        name="overdue_reminder_enabled"
+                        type="checkbox"
+                        checked={notifPrefs.overdue_reminder_enabled}
+                        disabled={!canManageSettings}
+                        onChange={(e) => updatePreference("overdue_reminder_enabled", e.target.checked)}
+                      />
+                      <i />
+                    </label>
+                  </div>
+                </div>
+
+                {/* 4. Excessive Queue Wait */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-queue-alerts"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
+                    >
+                      {language === "id"
+                        ? "Peringatan Waktu Tunggu Antrean Berlebih"
+                        : "Excessive Queue Wait Alert"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Kirim notifikasi jika antrean walk-in menunggu melebihi batas waktu toleransi."
+                        : "Send an alert if walk-in clients wait longer than the designated threshold."}
+                    </small>
+                  </div>
+                  <div className="notif-setting-action flex items-center gap-3 shrink-0">
+                    {notifPrefs.queue_alerts_enabled && (
+                      <select
+                        aria-label="Batas waktu tunggu antrean"
+                        className="notif-setting-select h-8.5 border border-stone bg-ivory px-2.5 text-xs rounded-sm focus:border-copper focus:ring-1 focus:ring-copper outline-none text-charcoal cursor-pointer"
+                        value={notifPrefs.excessive_wait_threshold_minutes}
+                        disabled={!canManageSettings}
+                        onChange={(e) =>
+                          updatePreference(
+                            "excessive_wait_threshold_minutes",
+                            Number(e.target.value)
+                          )
+                        }
+                      >
+                        <option value={15}>15 menit / 15m</option>
+                        <option value={25}>25 menit / 25m</option>
+                        <option value={30}>30 menit / 30m</option>
+                        <option value={45}>45 menit / 45m</option>
+                        <option value={60}>60 menit / 60m</option>
+                      </select>
+                    )}
+                    <label htmlFor="pref-queue-alerts" className="switch shrink-0 cursor-pointer">
+                      <input
+                        id="pref-queue-alerts"
+                        name="queue_alerts_enabled"
+                        type="checkbox"
+                        checked={notifPrefs.queue_alerts_enabled}
+                        disabled={!canManageSettings}
+                        onChange={(e) =>
+                          updatePreference("queue_alerts_enabled", e.target.checked)
+                        }
+                      />
+                      <i />
+                    </label>
+                  </div>
+                </div>
+
+                {/* 5. Shift Reminders */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-barber-shift"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
+                    >
+                      {language === "id"
+                        ? "Pengingat Shift Staf & Kapster"
+                        : "Staff & Barber Shift Alerts"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Peringatan awal sebelum jadwal kerja kapster dimulai dan saat shift berakhir."
+                        : "Notify barbers before work shift begins and when shifts conclude."}
+                    </small>
+                  </div>
+                  <label htmlFor="pref-barber-shift" className="switch shrink-0 cursor-pointer">
+                    <input
+                      id="pref-barber-shift"
+                      name="barber_shift_alerts_enabled"
+                      type="checkbox"
+                      checked={notifPrefs.barber_shift_alerts_enabled}
                       disabled={!canManageSettings}
                       onChange={(e) =>
-                        updatePreference("queue_alerts_enabled", e.target.checked)
+                        updatePreference("barber_shift_alerts_enabled", e.target.checked)
                       }
                     />
                     <i />
-                  </span>
+                  </label>
                 </div>
-              </label>
 
-              {/* 5. Shift Reminders */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Pengingat Shift Staf & Kapster"
-                      : "Staff & Barber Shift Alerts"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Peringatan awal sebelum jadwal kerja kapster dimulai dan saat shift berakhir."
-                      : "Notify barbers before work shift begins and when shifts conclude."}
-                  </small>
-                </span>
-                <span className="switch">
-                  <input
-                    type="checkbox"
-                    checked={notifPrefs.barber_shift_alerts_enabled}
-                    disabled={!canManageSettings}
-                    onChange={(e) =>
-                      updatePreference("barber_shift_alerts_enabled", e.target.checked)
-                    }
-                  />
-                  <i />
-                </span>
-              </label>
-
-              {/* 6. Financial & Register Alerts */}
-              <label>
-                <span>
-                  <strong>
-                    {language === "id"
-                      ? "Notifikasi Transaksi Keuangan & Tutup Kasir"
-                      : "Financial Transactions & Daily Register Alerts"}
-                  </strong>
-                  <small>
-                    {language === "id"
-                      ? "Terima pembaruan untuk pembayaran sukses, refund, pencairan, dan rekonsiliasi harian."
-                      : "Receive alerts for recorded payments, refunds, payouts, and register closures."}
-                  </small>
-                </span>
-                <span className="switch">
-                  <input
-                    type="checkbox"
-                    checked={notifPrefs.financial_alerts_enabled}
-                    disabled={!canManageSettings}
-                    onChange={(e) =>
-                      updatePreference("financial_alerts_enabled", e.target.checked)
-                    }
-                  />
-                  <i />
-                </span>
-              </label>
-            </>
-          ) : null}
+                {/* 6. Financial & Register Alerts */}
+                <div className="flex items-center justify-between py-3.5 gap-4">
+                  <div className="grow min-w-0">
+                    <label
+                      htmlFor="pref-financial"
+                      className="block text-xs font-semibold text-charcoal cursor-pointer"
+                    >
+                      {language === "id"
+                        ? "Notifikasi Transaksi Keuangan & Tutup Kasir"
+                        : "Financial Transactions & Daily Register Alerts"}
+                    </label>
+                    <small className="block text-2xs text-muted-text mt-0.5">
+                      {language === "id"
+                        ? "Terima pembaruan untuk pembayaran sukses, refund, pencairan, dan rekonsiliasi harian."
+                        : "Receive alerts for recorded payments, refunds, payouts, and register closures."}
+                    </small>
+                  </div>
+                  <label htmlFor="pref-financial" className="switch shrink-0 cursor-pointer">
+                    <input
+                      id="pref-financial"
+                      name="financial_alerts_enabled"
+                      type="checkbox"
+                      checked={notifPrefs.financial_alerts_enabled}
+                      disabled={!canManageSettings}
+                      onChange={(e) =>
+                        updatePreference("financial_alerts_enabled", e.target.checked)
+                      }
+                    />
+                    <i />
+                  </label>
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       )}
 
       {/* --- Billing (Localized) --- */}
       {section === "Billing" && (
-        <div className="billing-panel">
+        <div className="billing-panel grid grid-cols-1 md:grid-cols-3 border border-stone-line divide-y md:divide-y-0 md:divide-x divide-stone-line bg-white rounded-sm mb-6">
           <div>
             <Badge tone="success">{t("settings.billingActivePlan")}</Badge>
             <h3>{t("settings.billingPlanName")}</h3>
             <p>{t("settings.billingPlanDesc")}</p>
             <strong>
-              $79 <small>{t("settings.billingPerMonth")}</small>
+              $79 <small className="block text-2xs text-muted-text mt-0.5">{t("settings.billingPerMonth")}</small>
             </strong>
             <button className="filter-button">{t("settings.billingChangePlan")}</button>
           </div>
@@ -1680,123 +1813,165 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
       {/* --- Payroll & Compensation Defaults --- */}
       {section === "Payroll & Compensation" && (
-        <div className="form-grid">
-          <label className="full">
-            <span>{t("settings.payrollModelLabel")}</span>
-            <select
-              value={payrollSettings.default_model}
-              onChange={(e) => {
-                setPayrollSettings({
-                  ...payrollSettings,
-                  default_model: e.target.value as "commission" | "salary" | "hybrid",
-                })
-                setIsPayrollDirty(true)
-              }}
-            >
-              <option value="commission">{t("settings.payrollModelCommission")}</option>
-              <option value="salary">{t("settings.payrollModelSalary")}</option>
-              <option value="hybrid">{t("settings.payrollModelHybrid")}</option>
-            </select>
-          </label>
+        <div className="bg-ivory-light border border-stone rounded-lg p-5 sm:p-6 mb-6 shadow-subtle">
+          <h3 className="font-serif text-lg text-charcoal mb-1">
+            {t("settings.payrollDefaultsTitle")}
+          </h3>
+          <p className="text-xs text-muted-text mb-4">
+            {t("settings.payrollDefaultsDesc")}
+          </p>
 
-          {(payrollSettings.default_model === "commission" ||
-            payrollSettings.default_model === "hybrid") && (
-              <>
-                <label>
-                  <span>{t("settings.payrollMethodLabel")}</span>
-                  <select
-                    value={payrollSettings.default_commission_type}
-                    onChange={(e) => {
-                      setPayrollSettings({
-                        ...payrollSettings,
-                        default_commission_type: e.target.value as "percentage" | "fixed",
-                      })
-                      setIsPayrollDirty(true)
-                    }}
-                  >
-                    <option value="percentage">{t("settings.payrollMethodPercentage")}</option>
-                    <option value="fixed">{t("settings.payrollMethodFixed")}</option>
-                  </select>
-                </label>
-
-                {payrollSettings.default_commission_type === "percentage" ? (
-                  <label>
-                    <span>{t("settings.payrollRateLabel")}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={payrollSettings.default_commission_rate_bps / 100}
-                      onChange={(e) => {
-                        const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0))
-                        setPayrollSettings({
-                          ...payrollSettings,
-                          default_commission_rate_bps: Math.round(pct * 100),
-                        })
-                        setIsPayrollDirty(true)
-                      }}
-                    />
-                  </label>
-                ) : (
-                  <label>
-                    <span>{t("settings.payrollFixedLabel")}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="5000"
-                      value={payrollSettings.default_fixed_commission_amount}
-                      onChange={(e) => {
-                        setPayrollSettings({
-                          ...payrollSettings,
-                          default_fixed_commission_amount: Math.max(0, Number(e.target.value) || 0),
-                        })
-                        setIsPayrollDirty(true)
-                      }}
-                    />
-                  </label>
-                )}
-              </>
-            )}
-
-          {(payrollSettings.default_model === "salary" ||
-            payrollSettings.default_model === "hybrid") && (
-              <label className="full">
-                <span>{t("settings.payrollSalaryLabel")}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="100000"
-                  value={payrollSettings.default_monthly_salary}
-                  onChange={(e) => {
-                    setPayrollSettings({
-                      ...payrollSettings,
-                      default_monthly_salary: Math.max(0, Number(e.target.value) || 0),
-                    })
-                    setIsPayrollDirty(true)
-                  }}
-                />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-full">
+              <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                {t("settings.payrollModelLabel")}
               </label>
-            )}
+              <select
+                value={payrollSettings.default_model}
+                onChange={(e) => {
+                  setPayrollSettings({
+                    ...payrollSettings,
+                    default_model: e.target.value as "commission" | "salary" | "hybrid",
+                  })
+                  setIsPayrollDirty(true)
+                }}
+                className="w-full h-9 px-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all cursor-pointer"
+              >
+                <option value="commission">{t("settings.payrollModelCommission")}</option>
+                <option value="salary">{t("settings.payrollModelSalary")}</option>
+                <option value="hybrid">{t("settings.payrollModelHybrid")}</option>
+              </select>
+            </div>
 
-          <label className="full">
-            <span>{t("settings.payrollTipsPolicyLabel")}</span>
-            <select
-              value={payrollSettings.default_tips_policy}
-              onChange={(e) => {
-                setPayrollSettings({
-                  ...payrollSettings,
-                  default_tips_policy: e.target.value as "direct" | "pooled",
-                })
-                setIsPayrollDirty(true)
-              }}
-            >
-              <option value="direct">{t("settings.payrollTipsDirect")}</option>
-              <option value="pooled">{t("settings.payrollTipsPooled")}</option>
-            </select>
-          </label>
+            {(payrollSettings.default_model === "commission" ||
+              payrollSettings.default_model === "hybrid") && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                      {t("settings.payrollMethodLabel")}
+                    </label>
+                    <select
+                      value={payrollSettings.default_commission_type}
+                      onChange={(e) => {
+                        setPayrollSettings({
+                          ...payrollSettings,
+                          default_commission_type: e.target.value as "percentage" | "fixed",
+                        })
+                        setIsPayrollDirty(true)
+                      }}
+                      className="w-full h-9 px-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all cursor-pointer"
+                    >
+                      <option value="percentage">{t("settings.payrollMethodPercentage")}</option>
+                      <option value="fixed">{t("settings.payrollMethodFixed")}</option>
+                    </select>
+                  </div>
 
-          <p className="full" style={{ fontSize: "11px", color: "var(--muted)", margin: "4px 0 0" }}>
+                  {payrollSettings.default_commission_type === "percentage" ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                        {t("settings.payrollRateLabel")}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={payrollSettings.default_commission_rate_bps / 100}
+                          onChange={(e) => {
+                            const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0))
+                            setPayrollSettings({
+                              ...payrollSettings,
+                              default_commission_rate_bps: Math.round(pct * 100),
+                            })
+                            setIsPayrollDirty(true)
+                          }}
+                          className="w-full h-9 px-3 pr-8 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all"
+                        />
+                        <span className="absolute right-3 top-2 text-xs text-muted-text font-bold pointer-events-none">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                        {t("settings.payrollFixedLabel")}
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs text-muted-text font-mono pointer-events-none">
+                          Rp
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5000"
+                          value={payrollSettings.default_fixed_commission_amount}
+                          onChange={(e) => {
+                            setPayrollSettings({
+                              ...payrollSettings,
+                              default_fixed_commission_amount: Math.max(0, Number(e.target.value) || 0),
+                            })
+                            setIsPayrollDirty(true)
+                          }}
+                          className="w-full h-9 pl-9 pr-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+            {(payrollSettings.default_model === "salary" ||
+              payrollSettings.default_model === "hybrid") && (
+                <div className="col-span-full">
+                  <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                    {t("settings.payrollSalaryLabel")}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-muted-text font-mono pointer-events-none">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100000"
+                      value={payrollSettings.default_monthly_salary}
+                      onChange={(e) => {
+                        setPayrollSettings({
+                          ...payrollSettings,
+                          default_monthly_salary: Math.max(0, Number(e.target.value) || 0),
+                        })
+                        setIsPayrollDirty(true)
+                      }}
+                      className="w-full h-9 pl-9 pr-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+            <div className="col-span-full">
+              <label className="block text-xs font-semibold text-charcoal mb-1.5">
+                {t("settings.payrollTipsPolicyLabel")}
+              </label>
+              <select
+                value={payrollSettings.default_tips_policy}
+                onChange={(e) => {
+                  setPayrollSettings({
+                    ...payrollSettings,
+                    default_tips_policy: e.target.value as "direct" | "pooled",
+                  })
+                  setIsPayrollDirty(true)
+                }}
+                className="w-full h-9 px-3 bg-ivory border border-stone rounded-sm text-xs font-sans text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none transition-all cursor-pointer"
+              >
+                <option value="direct">{t("settings.payrollTipsDirect")}</option>
+                <option value="pooled">{t("settings.payrollTipsPooled")}</option>
+              </select>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-text mt-4 pt-3 border-t border-stone">
             {t("settings.payrollNote")}
           </p>
         </div>
@@ -1804,52 +1979,59 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
       {/* --- Section Save Action --- */}
       {section === "Shop profile" && (
-        <button
-          type="button"
-          className="primary-button settings-save"
-          onClick={handleSaveShop}
-          disabled={!canManageSettings || isSavingShop || !isShopDirty || !shopName.trim()}
-        >
-          {isSavingShop
-            ? language === "id"
-              ? "Menyimpan profil toko..."
-              : "Saving shop profile..."
-            : isShopDirty
+        <div className="pt-2">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={handleSaveShop}
+            disabled={!canManageSettings || isSavingShop || !isShopDirty || !shopName.trim()}
+            isLoading={isSavingShop}
+          >
+            {isSavingShop
               ? language === "id"
-                ? "Simpan perubahan *"
-                : "Save changes *"
-              : language === "id"
-                ? "Profil tersimpan"
-                : "Profile saved"}
-        </button>
+                ? "Menyimpan profil barbershop..."
+                : "Saving shop profile..."
+              : isShopDirty
+                ? language === "id"
+                  ? "Simpan perubahan *"
+                  : "Save changes *"
+                : language === "id"
+                  ? "Profil tersimpan"
+                  : "Profile saved"}
+          </Button>
+        </div>
       )}
 
       {section === "Payroll & Compensation" && (
-        <button
-          type="button"
-          className="primary-button settings-save"
-          onClick={handleSavePayrollSettings}
-          disabled={isSavingPayroll || !isPayrollDirty}
-        >
-          {isSavingPayroll
-            ? language === "id"
-              ? "Menyimpan standar kompensasi..."
-              : "Saving defaults..."
-            : isPayrollDirty
+        <div className="pt-2">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={handleSavePayrollSettings}
+            disabled={isSavingPayroll || !isPayrollDirty}
+            isLoading={isSavingPayroll}
+          >
+            {isSavingPayroll
               ? language === "id"
-                ? "Simpan perubahan *"
-                : "Save changes *"
-              : language === "id"
-                ? "Standar kompensasi tersimpan"
-                : "Defaults saved"}
-        </button>
+                ? "Menyimpan standar kompensasi..."
+                : "Saving defaults..."
+              : isPayrollDirty
+                ? language === "id"
+                  ? "Simpan perubahan *"
+                  : "Save changes *"
+                : language === "id"
+                  ? "Standar kompensasi tersimpan"
+                  : "Defaults saved"}
+          </Button>
+        </div>
       )}
 
       {section !== "Billing" &&
         section !== "Shop profile" &&
         section !== "Hours & availability" &&
         section !== "Services & pricing" &&
-        section !== "Payroll & Compensation" && (
+        section !== "Payroll & Compensation" &&
+        section !== "Notifications" && (
           <button className="primary-button settings-save">{t("common.save")}</button>
         )}
     </section>

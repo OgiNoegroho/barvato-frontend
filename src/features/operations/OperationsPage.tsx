@@ -522,12 +522,16 @@ export function OperationsPage({
           onStart={(item) => handleStart(item, false)}
           onComplete={openQueueCheckout}
           onCancel={handleCancelQueue}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((prev) => !prev)}
           onCollapse={() => setCollapsed(true)}
           timezone={timezone}
         />
 
         {collapsed && (
           <button
+            type="button"
+            title={language === "id" ? "Buka antrean langsung" : "Reopen walk-in queue"}
             className="queue-reopen"
             onClick={() => setCollapsed(false)}
             aria-label="Reopen walk-in queue"

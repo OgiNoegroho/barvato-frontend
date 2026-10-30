@@ -865,10 +865,16 @@ main {
     padding-inline: 10px;
   }
   .brand-word,
-  .nav-item span,
-  .rail-foot span:not(.avatar),
+  .nav-item .nav-label,
+  .rail-foot .foot-label,
   .nav-item b {
     display: none;
+  }
+  .nav-item .nav-icon {
+    display: flex !important;
+  }
+  .rail-foot .avatar {
+    display: grid !important;
   }
   .brand {
     justify-content: center;

@@ -2,6 +2,8 @@ import React, { useState } from "react"
 import { useAuth } from "./AuthContext"
 import { ApiError } from "../../lib/api"
 import { Icon } from "../../components/ui/Icon"
+import { Button } from "../../components/ui/Button"
+import { Input } from "../../components/ui/Input"
 import { useI18n } from "../../lib/i18n"
 import { useToast } from "../../hooks/useToast"
 
@@ -69,97 +71,90 @@ export function ChangePasswordModal() {
   }
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div
-        className="modal"
+        className="modal bg-ivory-light border border-stone shadow-modal rounded-lg w-full max-w-[460px] p-5 sm:p-6 text-charcoal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="change-pw-title"
-        style={{ width: "min(460px, 100%)" }}
       >
-        <div className="modal-head">
+        <div className="modal-head pb-3 mb-3 border-b border-stone">
           <div>
-            <span className="section-index">
+            <span className="section-index text-[9px] font-bold tracking-widest text-copper uppercase block mb-1">
               {language === "id" ? "PERSYARATAN KEAMANAN" : "SECURITY REQUIREMENT"}
             </span>
-            <h2 id="change-pw-title">{t("auth.mustChangePasswordTitle")}</h2>
+            <h2 id="change-pw-title" className="font-serif text-xl sm:text-2xl text-charcoal m-0">
+              {t("auth.mustChangePasswordTitle")}
+            </h2>
           </div>
         </div>
 
-        <p style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.5, marginBottom: "20px" }}>
+        <p className="text-xs text-muted-text leading-relaxed mb-5">
           {t("auth.mustChangePasswordSubtitle")}
         </p>
 
         {errorMessage && (
-          <div className="login-error-alert" role="alert" style={{ marginBottom: "16px" }}>
+          <div className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal" role="alert">
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group" style={{ marginBottom: "14px" }}>
-            <label>
-              {language === "id" ? "Kata Sandi Saat Ini (Sementara)" : "Current (Temporary) Password"}
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder={language === "id" ? "Masukkan kata sandi saat ini" : "Enter current password"}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-              />
-            </label>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            type="password"
+            autoComplete="current-password"
+            label={language === "id" ? "Kata Sandi Saat Ini (Sementara)" : "Current (Temporary) Password"}
+            placeholder={language === "id" ? "Masukkan kata sandi saat ini" : "Enter current password"}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
 
-          <div className="form-group" style={{ marginBottom: "14px" }}>
-            <label>
-              {t("auth.newPasswordLabel")} ({language === "id" ? "Min. 8 karakter" : "Min. 8 characters"})
-              <input
-                type="password"
-                autoComplete="new-password"
-                placeholder={language === "id" ? "Masukkan kata sandi baru" : "Enter your new password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </label>
-          </div>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            label={`${t("auth.newPasswordLabel")} (${language === "id" ? "Min. 8 karakter" : "Min. 8 characters"})`}
+            placeholder={language === "id" ? "Masukkan kata sandi baru" : "Enter your new password"}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
 
-          <div className="form-group" style={{ marginBottom: "20px" }}>
-            <label>
-              {t("auth.confirmPasswordLabel")}
-              <input
-                type="password"
-                autoComplete="new-password"
-                placeholder={language === "id" ? "Ulangi kata sandi baru" : "Re-enter your new password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </label>
-          </div>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            label={t("auth.confirmPasswordLabel")}
+            placeholder={language === "id" ? "Ulangi kata sandi baru" : "Re-enter your new password"}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
 
-          <div className="modal-actions" style={{ justifyContent: "space-between" }}>
-            <button
+          <div className="modal-actions flex items-center justify-between pt-4 mt-5 border-t border-stone">
+            <Button
               type="button"
-              className="text-button"
+              variant="ghost"
               onClick={() => void logout()}
-              style={{ color: "var(--danger)" }}
+              className="text-danger hover:text-danger hover:bg-danger-soft"
+              disabled={isSubmitting}
             >
               {language === "id" ? "Keluar saja" : "Sign out instead"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="primary-button"
-              disabled={isSubmitting}
+              variant="primary"
+              isLoading={isSubmitting}
             >
               {isSubmitting
                 ? language === "id"
                   ? "Menyimpan kata sandi..."
                   : "Updating Password..."
                 : t("auth.saveNewPasswordButton")}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

@@ -3,13 +3,17 @@ import { navItems } from "../../data/team"
 import { Icon } from "../ui/Icon"
 import { useAuth } from "../../features/auth/AuthContext"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
+import { cn } from "../../lib/utils"
 
 interface SidebarProps {
   currentPage: Page
   onSelectPage: (page: Page) => void
 }
 
-export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
+export function Sidebar({
+  currentPage,
+  onSelectPage,
+}: SidebarProps) {
   const { user, currentShop, logout } = useAuth()
   const { t } = useI18n()
 
@@ -27,37 +31,93 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
     : t("roles.staff").toUpperCase()
 
   return (
-    <aside className="rail">
+    <aside
+      className={cn(
+        "rail",
+        "w-[68px] xl:w-[220px] hidden md:flex flex-col justify-between p-3.5 xl:p-6 bg-charcoal text-ivory-light shrink-0 h-screen sticky top-0 border-r border-charcoal-light/60 z-30 transition-all select-none",
+      )}
+    >
       <button
-        className="brand"
+        type="button"
+        className={cn(
+          "brand",
+          "flex items-center gap-3 text-left w-full border-0 bg-transparent cursor-pointer p-0 mb-6 text-ivory-light hover:opacity-95 transition-opacity",
+        )}
         aria-label="Barvato"
         onClick={() => onSelectPage("Overview")}
       >
-        <span className="brand-mark">B</span>
-        <span className="brand-word">BARVATO</span>
+        <span
+          className={cn(
+            "brand-mark",
+            "w-9 h-9 rounded-full bg-copper text-ivory-light grid place-items-center font-serif text-xl font-bold shrink-0 shadow-subtle",
+          )}
+        >
+          B
+        </span>
+        <span
+          className={cn(
+            "brand-word",
+            "font-serif text-2xl tracking-wide font-normal text-ivory-light hidden xl:inline",
+          )}
+        >
+          BARVATO
+        </span>
       </button>
-      <nav className="nav-list" aria-label="Primary navigation">
+
+      <nav
+        className={cn("nav-list", "flex flex-col gap-1 w-full my-auto")}
+        aria-label="Primary navigation"
+      >
         {navItems.map((item) => {
           const navKey = `nav.${item.label.toLowerCase()}` as TranslationKey
           const label = t(navKey)
+          const isActive = currentPage === item.label
+
           return (
             <button
               key={item.label}
-              className={`nav-item ${currentPage === item.label ? "active" : ""}`}
+              type="button"
+              className={cn(
+                "nav-item",
+                "flex items-center gap-3 w-full px-2.5 xl:px-3 py-2.5 rounded-sm text-xs font-semibold transition-colors duration-150 text-stone-muted hover:text-ivory-light hover:bg-charcoal-light/60 relative text-left cursor-pointer",
+                isActive &&
+                  "active bg-charcoal-light text-ivory-light before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-copper before:rounded-r",
+              )}
               onClick={() => onSelectPage(item.label)}
+              title={label}
             >
-              <Icon name={item.icon} />
-              <span>{label}</span>
-              {item.label === "Operations" && <b>3</b>}
+              <i className="nav-icon shrink-0 not-italic flex items-center justify-center pointer-events-none">
+                <Icon name={item.icon} size={18} />
+              </i>
+              <span className="nav-label hidden xl:inline truncate pointer-events-none">
+                {label}
+              </span>
+              {item.label === "Operations" && (
+                <b className="hidden xl:inline ml-auto bg-copper text-ivory-light text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none pointer-events-none">
+                  3
+                </b>
+              )}
             </button>
           )
         })}
       </nav>
-      <div className="rail-foot">
+
+      <div
+        className={cn(
+          "rail-foot",
+          "mt-auto pt-4 border-t border-charcoal-light/60",
+        )}
+      >
         <div
-          className="shop-switch"
-          style={{ justifyContent: "space-between", cursor: "pointer" }}
-          title={user ? `${t("common.signedInAs")} ${user.name} (${user.email || user.phone})` : ""}
+          className={cn(
+            "shop-switch",
+            "flex items-center justify-between gap-2 p-2 rounded-sm bg-charcoal-light/40 hover:bg-charcoal-light border border-stone-muted/15 transition-colors cursor-pointer text-left",
+          )}
+          title={
+            user
+              ? `${t("common.signedInAs")} ${user.name} (${user.email || user.phone})`
+              : ""
+          }
           onClick={() => onSelectPage("Settings")}
           role="button"
           tabIndex={0}
@@ -68,20 +128,23 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
             }
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, overflow: "hidden" }}>
-            <span className="avatar small">{initials}</span>
-            <span style={{ minWidth: 0, overflow: "hidden" }}>
-              <strong style={{ display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+            <span className="avatar w-7 h-7 rounded-full bg-charcoal-light text-ivory-light text-[9px] font-bold grid place-items-center shrink-0 border border-stone-muted/30">
+              {initials}
+            </span>
+            <div className="foot-label min-w-0 overflow-hidden hidden xl:block">
+              <strong className="block text-xs font-bold text-ivory-light truncate">
                 {currentShop?.name || "Shop"}
               </strong>
-              <small style={{ display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+              <small className="block text-[10px] text-stone-muted truncate">
                 {user?.name || t("roles.staff")} · {roleLabel}
               </small>
-            </span>
+            </div>
           </div>
+
           <button
             type="button"
-            className="logout-button"
+            className="logout-button hidden xl:inline-flex items-center justify-center p-1 rounded text-stone-muted hover:text-danger transition-colors bg-transparent border-0 shrink-0 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation()
               void logout()
@@ -89,11 +152,12 @@ export function Sidebar({ currentPage, onSelectPage }: SidebarProps) {
             title={t("common.signOut")}
             aria-label={t("common.signOut")}
           >
-            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.05em" }}>{t("common.exit")}</span>
+            <span className="text-[10px] font-bold tracking-wider">
+              {t("common.exit")}
+            </span>
           </button>
         </div>
       </div>
     </aside>
   )
 }
-

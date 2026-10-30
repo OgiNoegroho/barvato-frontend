@@ -2,6 +2,7 @@ import { useState, useCallback } from "react"
 import type { Page } from "./types"
 import { ToastProvider, useToast } from "./hooks/useToast"
 import { Icon } from "./components/ui/Icon"
+import { Button } from "./components/ui/Button"
 import { Sidebar } from "./components/layout/Sidebar"
 import { Topbar } from "./components/layout/Topbar"
 import { MobileNav } from "./components/layout/MobileNav"
@@ -19,7 +20,14 @@ import { ChangePasswordModal } from "./features/auth/ChangePasswordModal"
 import { I18nProvider, useI18n, type TranslationKey } from "./lib/i18n"
 
 function AppShell() {
-  const { user, currentShop, isLoading, isAuthenticated, initError, retrySession } = useAuth()
+  const {
+    user,
+    currentShop,
+    isLoading,
+    isAuthenticated,
+    initError,
+    retrySession,
+  } = useAuth()
   const { t } = useI18n()
   const [page, setPage] = useState<Page>("Overview")
   const [navTarget, setNavTarget] = useState<{
@@ -28,21 +36,22 @@ function AppShell() {
     targetDate?: string
   } | null>(null)
   const handleClearNavTarget = useCallback(() => setNavTarget(null), [])
-  const [modal, setModal] = useState<
-    "appointment" | "walkin" | { kind: "appointment"; initialDate?: string } | null
-  >(null)
+  const [modal, setModal] = useState<"appointment" | "walkin" | {
+    kind: "appointment"
+    initialDate?: string
+  } | null>(null)
   const { notify } = useToast()
 
   if (isLoading) {
     return (
-      <div className="session-status-screen">
-        <div className="session-status-card">
-          <span className="brand-mark large" style={{ margin: "0 auto 16px" }}>
+      <div className="session-status-screen min-h-screen grid place-items-center bg-ivory p-6">
+        <div className="session-status-card w-full max-w-[400px] text-center bg-ivory-light border border-stone rounded-sm p-8 sm:p-10 shadow-card">
+          <span className="brand-mark large w-12 h-12 rounded-full bg-copper text-white grid place-items-center font-serif text-2xl font-bold mx-auto mb-4">
             B
           </span>
-          <h2>BARVATO</h2>
-          <p>{t("auth.verifyingSession")}</p>
-          <div className="loading-spinner large" />
+          <h2 className="font-serif text-2xl text-charcoal m-0 mb-2">BARVATO</h2>
+          <p className="text-xs text-muted-text m-0 mb-6">{t("auth.verifyingSession")}</p>
+          <div className="loading-spinner large w-9 h-9 border-[3px] border-copper/20 border-t-copper rounded-full animate-spin mx-auto" />
         </div>
       </div>
     )
@@ -50,24 +59,21 @@ function AppShell() {
 
   if (initError) {
     return (
-      <div className="session-status-screen">
-        <div className="session-status-card">
-          <span
-            className="brand-mark large"
-            style={{ margin: "0 auto 16px", background: "var(--danger)" }}
-          >
+      <div className="session-status-screen min-h-screen grid place-items-center bg-ivory p-6">
+        <div className="session-status-card w-full max-w-[400px] text-center bg-ivory-light border border-stone rounded-sm p-8 sm:p-10 shadow-card">
+          <span className="brand-mark large w-12 h-12 rounded-full bg-danger text-white grid place-items-center font-serif text-2xl font-bold mx-auto mb-4">
             !
           </span>
-          <h2>{t("auth.connectionInterrupted")}</h2>
-          <p>{initError}</p>
-          <button
+          <h2 className="font-serif text-2xl text-charcoal m-0 mb-2">{t("auth.connectionInterrupted")}</h2>
+          <p className="text-xs text-muted-text m-0 mb-6">{initError}</p>
+          <Button
             type="button"
-            className="primary-button"
+            variant="primary"
+            className="w-full"
             onClick={retrySession}
-            style={{ width: "100%" }}
           >
             {t("common.retryConnection")}
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -104,10 +110,10 @@ function AppShell() {
           })
 
   return (
-    <div className="app-shell">
+    <div className="app-shell min-h-screen flex bg-ivory text-charcoal font-sans">
       <Sidebar currentPage={page} onSelectPage={setPage} />
 
-      <main>
+      <main className="flex-1 min-w-0 flex flex-col">
         <Topbar
           currentPage={page}
           onNavigate={setPage}
@@ -121,9 +127,16 @@ function AppShell() {
                     : undefined
               setNavTarget({ entityType, entityId, targetDate })
             }
-            if (entityType === "payment" || entityType === "payout" || entityType === "daily_close") {
+            if (
+              entityType === "payment" ||
+              entityType === "payout" ||
+              entityType === "daily_close"
+            ) {
               setPage("Money")
-            } else if (entityType === "staff" || entityType === "staff_exception") {
+            } else if (
+              entityType === "staff" ||
+              entityType === "staff_exception"
+            ) {
               setPage("Team")
             } else {
               setPage("Operations")
@@ -131,11 +144,12 @@ function AppShell() {
           }}
         />
 
-        <section className="content">
+        <section className="content flex-1 w-full max-w-[1540px] mx-auto p-4 sm:p-6 lg:p-8 xl:px-9 pb-24 md:pb-12">
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {currentShop?.name ? currentShop.name.toUpperCase() : "SHOP"} / {translatedPageName.toUpperCase()}
+                {currentShop?.name ? currentShop.name.toUpperCase() : "SHOP"} /{" "}
+                {translatedPageName.toUpperCase()}
               </p>
               <h1>{title}</h1>
               <p>{subtitle}</p>
@@ -160,10 +174,20 @@ function AppShell() {
           {page === "Operations" && (
             <OperationsPage
               onWalkin={() => setModal("walkin")}
-              onAppointment={(initialDate) => setModal({ kind: "appointment", initialDate })}
+              onAppointment={(initialDate) =>
+                setModal({ kind: "appointment", initialDate })
+              }
               notify={notify}
-              targetAppointmentId={navTarget?.entityType === "appointment" ? navTarget.entityId : null}
-              targetQueueId={navTarget?.entityType === "queue_entry" ? navTarget.entityId : null}
+              targetAppointmentId={
+                navTarget?.entityType === "appointment"
+                  ? navTarget.entityId
+                  : null
+              }
+              targetQueueId={
+                navTarget?.entityType === "queue_entry"
+                  ? navTarget.entityId
+                  : null
+              }
               targetDate={navTarget?.targetDate || null}
               onClearTarget={handleClearNavTarget}
             />
@@ -180,7 +204,9 @@ function AppShell() {
       {modal && (
         <BookingModal
           kind={typeof modal === "string" ? modal : modal.kind}
-          initialDate={typeof modal === "object" ? modal.initialDate : undefined}
+          initialDate={
+            typeof modal === "object" ? modal.initialDate : undefined
+          }
           timezone={currentShop?.timezone || "Asia/Jakarta"}
           onClose={() => setModal(null)}
           onSuccess={(msg) => {

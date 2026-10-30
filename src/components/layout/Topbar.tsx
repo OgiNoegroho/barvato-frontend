@@ -11,6 +11,7 @@ import {
 } from "../../lib/api"
 import { NotificationPanel } from "./NotificationPanel"
 import { NotificationPopouts, type PopoutItem } from "./NotificationPopouts"
+import { cn } from "../../lib/utils"
 
 interface TopbarProps {
   currentPage: Page
@@ -18,11 +19,15 @@ interface TopbarProps {
   onNavigateEntity?: (
     entityType?: string | null,
     entityId?: number | null,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
   ) => void
 }
 
-export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProps) {
+export function Topbar({
+  currentPage,
+  onNavigate,
+  onNavigateEntity,
+}: TopbarProps) {
   const { user, currentShop, logout, isAuthenticated, retrySession } = useAuth()
   const { t } = useI18n()
   const [unreadCount, setUnreadCount] = useState<number>(0)
@@ -54,7 +59,7 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
         onNavigate("Operations")
       }
     },
-    [onNavigateEntity, onNavigate]
+    [onNavigateEntity, onNavigate],
   )
 
   const fetchNotifications = useCallback(
@@ -76,7 +81,10 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
           for (const item of items) {
             seenIdsRef.current.add(item.id)
           }
-          const maxId = items.reduce((m, item) => (item.id > m ? item.id : m), 0)
+          const maxId = items.reduce(
+            (m, item) => (item.id > m ? item.id : m),
+            0,
+          )
           lastMaxIdRef.current = maxId
           hasInitializedRef.current = true
         } else {
@@ -91,7 +99,10 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
             }
           }
           if (items.length > 0) {
-            const maxId = items.reduce((m, item) => (item.id > m ? item.id : m), 0)
+            const maxId = items.reduce(
+              (m, item) => (item.id > m ? item.id : m),
+              0,
+            )
             if (maxId > lastMaxIdRef.current) {
               lastMaxIdRef.current = maxId
             }
@@ -111,7 +122,7 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
         inFlightRef.current = false
       }
     },
-    [isAuthenticated, retrySession]
+    [isAuthenticated, retrySession],
   )
 
   // Promote up to 3 items into active popouts from queue
@@ -162,7 +173,7 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
       }
       handleEntityNav(item)
     },
-    [handleEntityNav]
+    [handleEntityNav],
   )
 
   const toggleNotifications = () => {
@@ -178,7 +189,10 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
   useEffect(() => {
     void fetchNotifications(true)
     const interval = setInterval(() => {
-      if (typeof document === "undefined" || document.visibilityState === "visible") {
+      if (
+        typeof document === "undefined" ||
+        document.visibilityState === "visible"
+      ) {
         void fetchNotifications(false)
       }
     }, 12000)
@@ -197,13 +211,19 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
 
     window.addEventListener("focus", handleFocus)
     document.addEventListener("visibilitychange", handleVisibilityChange)
-    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged)
+    window.addEventListener(
+      NOTIFICATIONS_CHANGED_EVENT,
+      handleNotificationsChanged,
+    )
 
     return () => {
       clearInterval(interval)
       window.removeEventListener("focus", handleFocus)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, handleNotificationsChanged)
+      window.removeEventListener(
+        NOTIFICATIONS_CHANGED_EVENT,
+        handleNotificationsChanged,
+      )
     }
   }, [fetchNotifications])
 
@@ -217,24 +237,53 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
     : "B"
 
   return (
-    <header className="topbar">
-      <div className="mobile-brand">
-        <span className="brand-mark">B</span>
-        <strong>BARVATO</strong>
+    <header
+      className={cn(
+        "topbar",
+        "flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 border-b border-stone bg-ivory text-charcoal relative select-none",
+      )}
+    >
+      <div className={cn("mobile-brand", "md:hidden flex items-center gap-2")}>
+        <span className="brand-mark w-7 h-7 rounded-full bg-copper text-ivory-light font-serif font-bold text-base grid place-items-center shadow-subtle">
+          B
+        </span>
+        <strong className="font-serif text-lg tracking-wider text-charcoal">
+          BARVATO
+        </strong>
       </div>
-      <div className="search">
-        <Icon name="search" size={17} />
+
+      <div
+        className={cn(
+          "search",
+          "hidden sm:flex items-center gap-2.5 bg-ivory-light border border-stone rounded-sm px-3 w-64 md:w-80 h-[38px] text-xs text-charcoal shadow-subtle focus-within:border-copper focus-within:ring-1 focus-within:ring-copper transition-all",
+        )}
+      >
+        <span className="text-muted-text shrink-0">
+          <Icon name="search" size={16} />
+        </span>
         <input
           aria-label={t("common.search")}
           placeholder={t("shell.searchPlaceholder")}
+          className="w-full bg-transparent border-0 outline-none text-xs text-charcoal placeholder:text-muted-text font-sans"
         />
-        <kbd>⌘ K</kbd>
+        <kbd className="text-[10px] border border-stone text-muted-text rounded px-1.5 py-0.5 font-mono select-none shrink-0">
+          ⌘ K
+        </kbd>
       </div>
-      <div className="top-actions">
+
+      <div
+        className={cn(
+          "top-actions",
+          "flex items-center gap-2 sm:gap-2.5 ml-auto",
+        )}
+      >
         <div className="notification-anchor" ref={notifAnchorRef}>
           <button
             type="button"
-            className="icon-button notification-trigger"
+            className={cn(
+              "icon-button notification-trigger",
+              "w-[38px] h-[38px] rounded-sm border border-stone bg-ivory-light hover:border-copper/70 hover:bg-ivory text-charcoal grid place-items-center relative transition-colors cursor-pointer shadow-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper",
+            )}
             onClick={toggleNotifications}
             aria-label={
               unreadCount > 0
@@ -245,9 +294,9 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
             aria-expanded={isNotifOpen}
             aria-haspopup="dialog"
           >
-            <Icon name="bell" />
+            <Icon name="bell" size={18} />
             {unreadCount > 0 && (
-              <span className="notif-badge">
+              <span className="notif-badge absolute -top-1 -right-1 bg-copper text-ivory-light rounded-full min-w-[17px] h-[17px] px-1 text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -271,21 +320,30 @@ export function Topbar({ currentPage, onNavigate, onNavigateEntity }: TopbarProp
 
         <button
           type="button"
-          className="icon-button"
+          className={cn(
+            "icon-button",
+            "w-[38px] h-[38px] rounded-sm border border-stone bg-ivory-light hover:border-copper/70 hover:bg-ivory text-charcoal grid place-items-center transition-colors cursor-pointer shadow-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper",
+            currentPage === "Settings" && "border-copper text-copper bg-ivory",
+          )}
           onClick={() => onNavigate("Settings")}
           aria-label={t("nav.settings")}
           title={t("nav.settings")}
           aria-current={currentPage === "Settings" ? "page" : undefined}
         >
-          <Icon name="settings" />
+          <Icon name="settings" size={18} />
         </button>
+
         <button
-          className="icon-button"
+          type="button"
+          className={cn(
+            "icon-button",
+            "w-[38px] h-[38px] rounded-sm border border-stone bg-ivory-light hover:border-copper/70 hover:bg-ivory text-charcoal grid place-items-center transition-colors cursor-pointer shadow-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper",
+          )}
           onClick={() => void logout()}
           title={`${t("common.signedInAs")} ${user?.name || t("roles.staff")} · ${t("common.signOut")}`}
           aria-label={t("common.signOut")}
         >
-          <span style={{ fontSize: "11px", fontWeight: 700 }}>{initials}</span>
+          <span className="text-[11px] font-bold">{initials}</span>
         </button>
       </div>
     </header>

@@ -2,6 +2,8 @@ import React, { useState } from "react"
 import { servicesApi, type ServiceItem, ApiError } from "../../lib/api"
 import { formatRupiah } from "../../lib/format"
 import { Icon } from "../../components/ui/Icon"
+import { Button } from "../../components/ui/Button"
+import { Input } from "../../components/ui/Input"
 import { useI18n } from "../../lib/i18n"
 import { useToast } from "../../hooks/useToast"
 
@@ -102,20 +104,20 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onMouseDown={onClose}>
       <div
-        className="modal"
+        className="modal bg-ivory-light border border-stone shadow-modal rounded-lg w-full max-w-[480px] p-5 sm:p-6 text-charcoal"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="service-modal-title"
       >
-        <div className="modal-head">
+        <div className="modal-head pb-3 mb-4 border-b border-stone flex items-center justify-between">
           <div>
-            <span className="section-index">
+            <span className="section-index text-[9px] font-bold tracking-widest text-copper uppercase block mb-1">
               {language === "id" ? "KATALOG LAYANAN" : "SERVICE CATALOG"}
             </span>
-            <h2 id="service-modal-title">
+            <h2 id="service-modal-title" className="font-serif text-xl sm:text-2xl text-charcoal m-0">
               {isEditing
                 ? language === "id"
                   ? "Ubah Layanan"
@@ -123,95 +125,95 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
                 : t("settings.addService")}
             </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
+          <button
+            type="button"
+            className="icon-button p-1 text-muted-text hover:text-charcoal text-lg leading-none rounded hover:bg-stone/20 cursor-pointer bg-transparent border-0"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
             ×
           </button>
         </div>
 
         {errorMessage && (
           <div
-            className="login-error-alert"
+            className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal"
             role="alert"
-            style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
           >
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-grid">
-            <label className="full">
-              {t("settings.serviceName")}
-              <input
-                autoFocus
-                placeholder={
-                  language === "id" ? "cth. Potong Rambut Signature & Styling" : "e.g. Signature Haircut & Styling"
-                }
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            autoFocus
+            label={t("settings.serviceName")}
+            placeholder={
+              language === "id" ? "cth. Potong Rambut Signature & Styling" : "e.g. Signature Haircut & Styling"
+            }
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
 
-            <label>
-              {t("settings.serviceDuration")}
-              <input
-                type="number"
-                min="5"
-                max="480"
-                step="5"
-                value={durationMin}
-                onChange={(e) => setDurationMin(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                required
-              />
-            </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              type="number"
+              min="5"
+              max="480"
+              step="5"
+              label={t("settings.serviceDuration")}
+              value={durationMin}
+              onChange={(e) => setDurationMin(Math.max(1, parseInt(e.target.value, 10) || 0))}
+              disabled={isSubmitting}
+              required
+            />
 
-            <label>
-              {t("settings.servicePrice")}
-              <input
-                type="number"
-                min="0"
-                step="5000"
-                value={price}
-                onChange={(e) => setPrice(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                required
-              />
-              <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                {language === "id" ? "Format" : "Formatted"}: <strong>{formatRupiah(price)}</strong>
-              </small>
-            </label>
-
-            {isEditing && (
-              <label className="full" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                />
-                <span style={{ fontSize: "11px", fontWeight: 600 }}>
-                  {language === "id"
-                    ? "Layanan aktif (terlihat dalam reservasi dan antrean walk-in)"
-                    : "Service is active (visible in booking and walk-in queue)"}
-                </span>
-              </label>
-            )}
+            <Input
+              type="number"
+              min="0"
+              step="5000"
+              label={t("settings.servicePrice")}
+              helperText={`${language === "id" ? "Format" : "Formatted"}: ${formatRupiah(price)}`}
+              value={price}
+              onChange={(e) => setPrice(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              disabled={isSubmitting}
+              required
+            />
           </div>
 
-          <div className="modal-actions" style={{ marginTop: "24px" }}>
-            <button
+          {isEditing && (
+            <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+                className="w-4 h-4 rounded text-copper focus:ring-copper cursor-pointer"
+                disabled={isSubmitting}
+              />
+              <span className="text-xs font-medium text-charcoal">
+                {language === "id"
+                  ? "Layanan aktif (terlihat dalam reservasi dan antrean walk-in)"
+                  : "Service is active (visible in booking and walk-in queue)"}
+              </span>
+            </label>
+          )}
+
+          <div className="modal-actions flex items-center justify-end gap-2.5 pt-4 mt-5 border-t border-stone">
+            <Button
               type="button"
-              className="filter-button"
+              variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
             >
               {t("common.cancel")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="primary-button"
-              disabled={isSubmitting}
+              variant="primary"
+              isLoading={isSubmitting}
             >
               {isSubmitting
                 ? t("common.saving")
@@ -220,7 +222,7 @@ export function ServiceModal({ service, onClose, onSuccess }: ServiceModalProps)
                 : language === "id"
                 ? "Buat Layanan"
                 : "Create Service"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

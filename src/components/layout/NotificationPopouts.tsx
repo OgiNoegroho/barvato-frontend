@@ -3,6 +3,7 @@ import { Icon } from "../ui/Icon"
 import type { IconName } from "../../types"
 import { useI18n } from "../../lib/i18n"
 import type { NotificationItem } from "../../lib/api"
+import { cn } from "../../lib/utils"
 
 export interface PopoutItem {
   id: number
@@ -16,7 +17,11 @@ interface NotificationPopoutsProps {
   onClick: (item: NotificationItem) => void
 }
 
-export function NotificationPopouts({ items, onDismiss, onClick }: NotificationPopoutsProps) {
+export function NotificationPopouts({
+  items,
+  onDismiss,
+  onClick,
+}: NotificationPopoutsProps) {
   const { t } = useI18n()
 
   if (items.length === 0) return null
@@ -41,7 +46,12 @@ export function NotificationPopouts({ items, onDismiss, onClick }: NotificationP
     ) {
       return "scissors"
     }
-    if (cat === "queue" || type.startsWith("queue") || type.includes("walk_in") || type.includes("walkin")) {
+    if (
+      cat === "queue" ||
+      type.startsWith("queue") ||
+      type.includes("walk_in") ||
+      type.includes("walkin")
+    ) {
       return "users"
     }
     if (cat === "appointment" || type.startsWith("appointment")) {
@@ -63,12 +73,34 @@ export function NotificationPopouts({ items, onDismiss, onClick }: NotificationP
     )
   }
 
+  const getCategoryIconStyles = (category: string) => {
+    switch (category) {
+      case "finance":
+        return "bg-[#f3ebd7] text-[#916b15]"
+      case "staff":
+      case "barber":
+        return "bg-[#e6ecf2] text-[#345c85]"
+      case "queue":
+        return "bg-[#e3ebe2] text-forest"
+      case "appointment":
+      default:
+        return "bg-copper-soft text-copper"
+    }
+  }
+
   return (
-    <div className="notif-popouts-container" role="region" aria-label="Incoming notifications">
+    <div
+      className="notif-popouts-container"
+      role="region"
+      aria-label="Incoming notifications"
+    >
       {items.map((item) => {
         const notif = item.notification
         const urgent = isHighPriority(notif.type)
-        const iconCategory = notif.category === "barber" ? "staff" : notif.category || notif.type.split(".")[0]
+        const iconCategory =
+          notif.category === "barber"
+            ? "staff"
+            : notif.category || notif.type.split(".")[0]
 
         return (
           <div
@@ -84,21 +116,38 @@ export function NotificationPopouts({ items, onDismiss, onClick }: NotificationP
               }
             }}
           >
-            <div className="notif-popout-icon">
-              <span className={`notif-icon-wrap ${iconCategory}`}>
-                <Icon name={getNotificationIcon(notif.type, notif.category)} size={14} />
+            <div className="notif-popout-icon shrink-0">
+              <span
+                className={cn(
+                  "notif-icon-wrap w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                  iconCategory,
+                  getCategoryIconStyles(iconCategory),
+                )}
+              >
+                <Icon
+                  name={getNotificationIcon(notif.type, notif.category)}
+                  size={14}
+                />
               </span>
             </div>
 
-            <div className="notif-popout-content">
-              <div className="notif-popout-header">
-                <span className="notif-popout-title">{notif.title}</span>
+            <div className="notif-popout-content min-w-0 flex-1 overflow-hidden">
+              <div className="notif-popout-header flex items-center gap-1.5 mb-0.5">
+                <span className="notif-popout-title text-xs font-semibold text-charcoal truncate">
+                  {notif.title}
+                </span>
                 {urgent && (
-                  <span className="notif-priority-badge">{t("notifications.priorityHigh")}</span>
+                  <span className="notif-priority-badge">
+                    {t("notifications.priorityHigh")}
+                  </span>
                 )}
-                <span className="notif-popout-time">{t("notifications.justNow")}</span>
+                <span className="notif-popout-time text-2xs text-muted-text ml-auto shrink-0 font-medium">
+                  {t("notifications.justNow")}
+                </span>
               </div>
-              <p className="notif-popout-message">{notif.message}</p>
+              <p className="notif-popout-message text-2xs text-muted-text leading-snug line-clamp-2 break-words m-0">
+                {notif.message}
+              </p>
             </div>
 
             <button
@@ -119,4 +168,3 @@ export function NotificationPopouts({ items, onDismiss, onClick }: NotificationP
     </div>
   )
 }
-

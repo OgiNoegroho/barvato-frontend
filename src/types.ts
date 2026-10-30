@@ -1,6 +1,24 @@
 export type Page = "Overview" | "Operations" | "Appointments" | "Team" | "Money" | "Settings"
 
-export type IconName = "grid" | "calendar" | "users" | "book" | "scissors" | "wallet" | "settings" | "plus" | "search" | "bell" | "chevron" | "clock" | "more" | "arrow"
+export type IconName =
+  | "grid"
+  | "calendar"
+  | "users"
+  | "book"
+  | "scissors"
+  | "wallet"
+  | "settings"
+  | "plus"
+  | "search"
+  | "bell"
+  | "chevron"
+  | "chevron-down"
+  | "chevron-up"
+  | "chevron-left"
+  | "chevron-right"
+  | "clock"
+  | "more"
+  | "arrow"
 
 export type Tone = "copper" | "ink" | "stone" | "forest" | "amber" | string
 

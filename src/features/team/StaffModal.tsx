@@ -6,6 +6,8 @@ import {
   ApiError,
 } from "../../lib/api"
 import { Icon } from "../../components/ui/Icon"
+import { Button } from "../../components/ui/Button"
+import { Input } from "../../components/ui/Input"
 import { useI18n } from "../../lib/i18n"
 
 interface StaffModalProps {
@@ -45,7 +47,7 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
       return
     }
 
-    if (commissionPct < 0 || commissionPct > 100) {
+    if (!isEditing && (commissionPct < 0 || commissionPct > 100)) {
       setErrorMessage("Commission rate must be between 0% and 100%.")
       return
     }
@@ -69,7 +71,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
         await staffApi.update(staff.id, {
           name: trimmedName,
           contact: contact.trim() || undefined,
-          commission_bps: commissionBps,
           active,
         })
         onSuccess(`Staff member "${trimmedName}" updated successfully`)
@@ -86,7 +87,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
         })
 
         if (res.temporary_password) {
-          // Keep modal open to show credentials to the owner
           setCreatedResult(res)
           onSuccess(`Staff member "${trimmedName}" created with login access`)
         } else {
@@ -110,62 +110,64 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
   // If a temporary password was generated, display credentials card
   if (createdResult && createdResult.temporary_password) {
     return (
-      <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onMouseDown={onClose}>
         <div
-          className="modal"
+          className="modal bg-ivory-light border border-stone shadow-modal rounded-lg w-full max-w-[480px] p-5 sm:p-6 text-charcoal"
           onMouseDown={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="staff-success-title"
         >
-          <div className="modal-head">
+          <div className="modal-head pb-3 mb-4 border-b border-stone flex items-center justify-between">
             <div>
-              <span className="section-index">{t("team.provisioningTitle")}</span>
-              <h2 id="staff-success-title">{t("team.accountCreated")}</h2>
+              <span className="section-index text-[9px] font-bold tracking-widest text-copper uppercase block mb-1">
+                {t("team.provisioningTitle")}
+              </span>
+              <h2 id="staff-success-title" className="font-serif text-xl sm:text-2xl text-charcoal m-0">
+                {t("team.accountCreated")}
+              </h2>
             </div>
-            <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
+            <button
+              type="button"
+              className="icon-button p-1 text-muted-text hover:text-charcoal text-lg leading-none rounded hover:bg-stone/20 cursor-pointer bg-transparent border-0"
+              onClick={onClose}
+              aria-label={t("common.close")}
+            >
               ×
             </button>
           </div>
 
-          <div
-            style={{
-              background: "var(--paper)",
-              border: "1px solid var(--line)",
-              padding: "20px",
-              marginBottom: "20px",
-            }}
-          >
-            <p style={{ margin: "0 0 14px", fontSize: "12px", color: "var(--ink)", lineHeight: 1.5 }}>
+          <div className="bg-ivory border border-stone p-4 rounded-sm mb-4">
+            <p className="text-xs text-charcoal leading-relaxed m-0 mb-3">
               {t("team.credentialsNotice", { name: createdResult.staff.name })}
             </p>
 
-            <div style={{ background: "var(--white)", border: "1px solid var(--line)", padding: "12px", fontSize: "12px" }}>
-              <div style={{ marginBottom: "6px" }}>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.loginId")}</span>
-                <strong>{email.trim() || phone.trim()}</strong>
+            <div className="bg-ivory-light border border-stone p-3 rounded-sm text-xs space-y-2">
+              <div className="flex">
+                <span className="text-muted-text w-28 shrink-0">{t("team.loginId")}</span>
+                <strong className="text-charcoal font-semibold">{email.trim() || phone.trim()}</strong>
               </div>
-              <div style={{ marginBottom: "6px" }}>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.tempPassword")}</span>
-                <code style={{ fontSize: "13px", color: "var(--amber)", fontWeight: 700 }}>
+              <div className="flex">
+                <span className="text-muted-text w-28 shrink-0">{t("team.tempPassword")}</span>
+                <code className="text-sm font-mono text-amber font-bold">
                   {createdResult.temporary_password}
                 </code>
               </div>
-              <div>
-                <span style={{ color: "var(--muted)", display: "inline-block", width: "120px" }}>{t("team.assignedRole")}</span>
-                <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{t(`roles.${role}` as any)}</span>
+              <div className="flex">
+                <span className="text-muted-text w-28 shrink-0">{t("team.assignedRole")}</span>
+                <span className="capitalize font-semibold text-charcoal">{t(`roles.${role}` as any)}</span>
               </div>
             </div>
 
-            <p style={{ margin: "14px 0 0", fontSize: "10px", color: "var(--muted)" }}>
+            <p className="text-[10px] text-muted-text mt-3 mb-0 leading-normal">
               {t("team.mustChangeNotice")}
             </p>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" className="primary-button" onClick={onClose}>
+          <div className="modal-actions flex justify-end pt-3 border-t border-stone">
+            <Button type="button" variant="primary" onClick={onClose}>
               {t("common.close")}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -173,20 +175,20 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onMouseDown={onClose}>
       <div
-        className="modal"
+        className="modal bg-ivory-light border border-stone shadow-modal rounded-lg w-full max-w-[500px] p-5 sm:p-6 text-charcoal"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="staff-modal-title"
       >
-        <div className="modal-head">
+        <div className="modal-head pb-3 mb-4 border-b border-stone flex items-center justify-between">
           <div>
-            <span className="section-index">
+            <span className="section-index text-[9px] font-bold tracking-widest text-copper uppercase block mb-1">
               {language === "id" ? "MANAJEMEN STAF" : "STAFF MANAGEMENT"}
             </span>
-            <h2 id="staff-modal-title">
+            <h2 id="staff-modal-title" className="font-serif text-xl sm:text-2xl text-charcoal m-0">
               {isEditing
                 ? language === "id"
                   ? "Ubah Data Staf"
@@ -194,146 +196,162 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
                 : t("team.addStaff")}
             </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
+          <button
+            type="button"
+            className="icon-button p-1 text-muted-text hover:text-charcoal text-lg leading-none rounded hover:bg-stone/20 cursor-pointer bg-transparent border-0"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
             ×
           </button>
         </div>
 
         {errorMessage && (
           <div
-            className="login-error-alert"
+            className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal"
             role="alert"
-            style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
           >
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-grid">
-            <label className="full">
-              {t("team.modalName")}
-              <input
-                autoFocus
-                placeholder={language === "id" ? "cth. Budi Pratama" : "e.g. Julian Ross"}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            autoFocus
+            label={t("team.modalName")}
+            placeholder={language === "id" ? "cth. Budi Pratama" : "e.g. Julian Ross"}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
 
-            <label>
-              {language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
-              <input
+          {!isEditing ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label={language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
                 placeholder="081299990002"
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
+                disabled={isSubmitting}
               />
-            </label>
 
-            <label>
-              {t("team.commissionRate")} (%)
-              <input
+              <Input
                 type="number"
                 min="0"
                 max="100"
                 step="0.5"
+                label={`${t("team.commissionRate")} (%)`}
+                helperText={`Basis points: ${Math.round(commissionPct * 100)} bps`}
                 value={commissionPct}
                 onChange={(e) => setCommissionPct(parseFloat(e.target.value) || 0)}
+                disabled={isSubmitting}
                 required
               />
-              <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                Basis points: <strong>{Math.round(commissionPct * 100)} bps</strong>
-              </small>
-            </label>
+            </div>
+          ) : (
+            <Input
+              label={language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
+              placeholder="081299990002"
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              disabled={isSubmitting}
+            />
+          )}
 
-            {isEditing && (
-              <label className="full" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px", cursor: "pointer" }}>
+          {isEditing && (
+            <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+                className="w-4 h-4 rounded text-copper focus:ring-copper cursor-pointer"
+                disabled={isSubmitting}
+              />
+              <span className="text-xs font-medium text-charcoal">
+                {language === "id"
+                  ? "Staf aktif (dapat menerima janji temu dan penugasan antrean)"
+                  : "Staff member is active (can take appointments and queue assignments)"}
+              </span>
+            </label>
+          )}
+
+          {!isEditing && (
+            <div className="border-t border-stone pt-3.5 mt-2">
+              <label className="flex items-center gap-2.5 mb-3 cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                  style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                  checked={createUser}
+                  onChange={(e) => setCreateUser(e.target.checked)}
+                  className="w-4 h-4 rounded text-copper focus:ring-copper cursor-pointer"
+                  disabled={isSubmitting}
                 />
-                <span style={{ fontSize: "11px", fontWeight: 600 }}>
+                <span className="text-xs font-semibold text-charcoal">
                   {language === "id"
-                    ? "Staf aktif (dapat menerima janji temu dan penugasan antrean)"
-                    : "Staff member is active (can take appointments and queue assignments)"}
+                    ? "Buat akun login untuk anggota staf ini"
+                    : "Create login credentials for this staff member"}
                 </span>
               </label>
-            )}
 
-            {!isEditing && (
-              <div className="full" style={{ borderTop: "1px solid var(--line)", paddingTop: "14px", marginTop: "6px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", marginBottom: "12px" }}>
-                  <input
-                    type="checkbox"
-                    checked={createUser}
-                    onChange={(e) => setCreateUser(e.target.checked)}
-                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                  />
-                  <span style={{ fontSize: "11px", fontWeight: 600 }}>
-                    {language === "id"
-                      ? "Buat akun login untuk anggota staf ini"
-                      : "Create login credentials for this staff member"}
-                  </span>
-                </label>
-
-                {createUser && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "var(--white)", padding: "12px", border: "1px solid var(--line)" }}>
-                    <label>
+              {createUser && (
+                <div className="space-y-3 bg-ivory p-3.5 border border-stone rounded-sm">
+                  <div>
+                    <label className="text-2xs font-bold uppercase tracking-wider text-charcoal block mb-1">
                       {t("team.modalRole")}
-                      <select value={role} onChange={(e) => setRole(e.target.value as "barber" | "manager")}>
-                        <option value="barber">{t("roles.barber")}</option>
-                        <option value="manager">{t("roles.manager")}</option>
-                      </select>
                     </label>
-
-                    <label>
-                      {t("team.modalEmail")}
-                      <input
-                        type="email"
-                        placeholder="barber@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </label>
-
-                    <label className="full">
-                      {t("team.modalPhone")}
-                      <input
-                        placeholder="081299990002"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                      />
-                    </label>
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as "barber" | "manager")}
+                      className="h-10 w-full appearance-none rounded-sm border border-stone bg-ivory-light px-3 text-sm text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none"
+                      disabled={isSubmitting}
+                    >
+                      <option value="barber">{t("roles.barber")}</option>
+                      <option value="manager">{t("roles.manager")}</option>
+                    </select>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          <div className="modal-actions" style={{ marginTop: "24px" }}>
-            <button
+                  <Input
+                    type="email"
+                    label={t("team.modalEmail")}
+                    placeholder="barber@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+
+                  <Input
+                    label={t("team.modalPhone")}
+                    placeholder="081299990002"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="modal-actions flex items-center justify-end gap-2.5 pt-4 mt-5 border-t border-stone">
+            <Button
               type="button"
-              className="filter-button"
+              variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
             >
               {t("common.cancel")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="primary-button"
-              disabled={isSubmitting}
+              variant="primary"
+              isLoading={isSubmitting}
             >
               {isSubmitting
                 ? t("common.saving")
                 : isEditing
                 ? t("common.save")
                 : t("team.addStaff")}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

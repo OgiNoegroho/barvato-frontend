@@ -8,7 +8,9 @@ import {
   ApiError,
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
+import { Button } from "../../components/ui/Button"
 import { Icon } from "../../components/ui/Icon"
+import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "../../components/ui/Modal"
 import { formatRupiah, getInitials } from "../../lib/format"
 import { useI18n } from "../../lib/i18n"
 import { useToast } from "../../hooks/useToast"
@@ -46,7 +48,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
   const [modalStaffId, setModalStaffId] = useState<number | "">("")
   const [modalPeriodStart, setModalPeriodStart] = useState(() => periodStart)
   const [modalPeriodEnd, setModalPeriodEnd] = useState(() => periodEnd)
-  const [amountInput, setAmountInput] = useState<string>("")
+  const [amountInput, setAmountInput] = useState<string>("" )
   const [userHasEditedAmount, setUserHasEditedAmount] = useState<boolean>(false)
   const [modalMethod, setModalMethod] = useState<"transfer" | "cash" | "other">("transfer")
   const [modalRefNumber, setModalRefNumber] = useState("")
@@ -276,490 +278,487 @@ export function FinancePeople({ type }: FinancePeopleProps) {
   }
 
   return (
-    <div className="finance-people">
+    <div className="w-full">
       {/* Pay Period & Top Action Bar */}
-      <div className="pay-period" style={{ flexWrap: "wrap", gap: "16px" }}>
-        <span>
-          <small>{isSummary ? t("finance.periodRange") : t("finance.allPayouts")}</small>
+      <div className="flex flex-wrap items-center gap-4 sm:gap-8 bg-ivory-paper border border-stone-line p-3.5 mb-4 rounded-sm">
+        <div>
+          <small className="block text-[10px] uppercase tracking-wider text-charcoal-muted">
+            {isSummary ? t("finance.periodRange") : t("finance.allPayouts")}
+          </small>
           {isSummary ? (
-            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+            <div className="flex items-center gap-1.5 mt-1">
               <input
                 type="date"
                 value={periodStart}
                 onChange={(e) => setPeriodStart(e.target.value)}
-                style={{
-                  fontSize: "12px",
-                  padding: "4px 8px",
-                  border: "1px solid var(--line)",
-                  background: "var(--white)",
-                }}
+                className="text-xs px-2 py-1 border border-stone-line bg-white rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               />
-              <span style={{ fontSize: "11px", color: "var(--muted)" }}>{t("finance.to")}</span>
+              <span className="text-xs text-charcoal-muted">{t("finance.to")}</span>
               <input
                 type="date"
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}
-                style={{
-                  fontSize: "12px",
-                  padding: "4px 8px",
-                  border: "1px solid var(--line)",
-                  background: "var(--white)",
-                }}
+                className="text-xs px-2 py-1 border border-stone-line bg-white rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               />
             </div>
           ) : (
-            <strong>
+            <strong className="block font-serif text-lg text-charcoal-ink mt-0.5">
               {new Date().toLocaleDateString(language === "id" ? "id-ID" : "en-US", { month: "long", year: "numeric" })}
             </strong>
           )}
-        </span>
+        </div>
 
         {isSummary ? (
           <>
-            <span>
-              <small>{t("finance.totalGross")}</small>
-              <strong>{formatRupiah(totalGrossOwed)}</strong>
-            </span>
-            <span>
-              <small>{t("finance.totalPaidOut")}</small>
-              <strong>{formatRupiah(totalPaidSum)}</strong>
-            </span>
-            <span>
-              <small>{t("finance.outstandingBalance")}</small>
-              <strong style={{ color: totalOutstanding > 0 ? "var(--forest, #2e7d32)" : "var(--ink)" }}>
+            <div>
+              <small className="block text-[10px] uppercase tracking-wider text-charcoal-muted">
+                {t("finance.totalGross")}
+              </small>
+              <strong className="block font-serif text-lg text-charcoal-ink mt-0.5">
+                {formatRupiah(totalGrossOwed)}
+              </strong>
+            </div>
+            <div>
+              <small className="block text-[10px] uppercase tracking-wider text-charcoal-muted">
+                {t("finance.totalPaidOut")}
+              </small>
+              <strong className="block font-serif text-lg text-charcoal-ink mt-0.5">
+                {formatRupiah(totalPaidSum)}
+              </strong>
+            </div>
+            <div>
+              <small className="block text-[10px] uppercase tracking-wider text-charcoal-muted">
+                {t("finance.outstandingBalance")}
+              </small>
+              <strong className={`block font-serif text-lg mt-0.5 ${totalOutstanding > 0 ? "text-forest" : "text-charcoal-ink"}`}>
                 {formatRupiah(totalOutstanding)}
               </strong>
-            </span>
+            </div>
           </>
         ) : (
-          <span>
-            <small>{t("finance.cumulativeDisbursed")}</small>
-            <strong>{formatRupiah(cumulativePayouts)}</strong>
-          </span>
+          <div>
+            <small className="block text-[10px] uppercase tracking-wider text-charcoal-muted">
+              {t("finance.cumulativeDisbursed")}
+            </small>
+            <strong className="block font-serif text-lg text-charcoal-ink mt-0.5">
+              {formatRupiah(cumulativePayouts)}
+            </strong>
+          </div>
         )}
 
-        <button
-          type="button"
-          className="primary-button"
-          onClick={openNewPayout}
-          style={{ marginLeft: "auto" }}
-        >
-          {t("finance.disbursePayout")}
-        </button>
+        <div className="ml-auto">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={openNewPayout}
+          >
+            {t("finance.disbursePayout")}
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (
         <div
-          className="login-error-alert"
+          className="my-4 p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2"
           role="alert"
-          style={{ margin: "16px 0", color: "var(--red, #cf3c3c)" }}
         >
           <Icon name="bell" size={16} />
           <span>{errorMessage}</span>
-          <button
+          <Button
             type="button"
-            className="filter-button"
-            style={{ marginLeft: "auto", fontSize: "10px" }}
+            variant="outline"
+            size="sm"
+            className="ml-auto"
             onClick={loadData}
           >
             {t("common.retry")}
-          </button>
+          </Button>
         </div>
       )}
 
       {isLoading ? (
-        <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+        <div className="py-12 text-center text-charcoal-muted text-xs">
           {isSummary ? t("finance.loadingPayroll") : t("finance.loadingPayouts")}
         </div>
       ) : isSummary ? (
         /* Unified Payroll Summary Table */
-        <div className="money-table" style={{ overflowX: "auto" }}>
-          <div
-            className="money-tr money-th"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.4fr 1fr 1fr 1.2fr 0.8fr 1.1fr 1fr 1.2fr 0.8fr",
-              gap: "8px",
-            }}
-          >
-            <span>{t("roles.barber")}</span>
-            <span>{t("team.compensationModel")}</span>
-            <span>{t("finance.colSalary")}</span>
-            <span>{t("team.commissionHeader")}</span>
-            <span>{t("money.colTips")}</span>
-            <span>{t("finance.colGrossTotal")}</span>
-            <span>{t("finance.colTotalPaid")}</span>
-            <span>{t("finance.colBalance")}</span>
-            <span style={{ textAlign: "right" }}>{t("common.actions")}</span>
-          </div>
-
-          {summaryList.length === 0 ? (
-            <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              {t("finance.noRecordsForPeriod")}
+        <div className="w-full overflow-x-auto border-t border-charcoal-ink">
+          <div className="min-w-[880px]">
+            <div className="grid grid-cols-[1.4fr_1fr_1fr_1.2fr_0.8fr_1.1fr_1fr_1.2fr_0.8fr] gap-2 py-3 border-b border-stone-line text-[10px] uppercase tracking-wider font-semibold text-charcoal-muted">
+              <span>{t("roles.barber")}</span>
+              <span>{t("team.compensationModel")}</span>
+              <span>{t("finance.colSalary")}</span>
+              <span>{t("team.commissionHeader")}</span>
+              <span>{t("money.colTips")}</span>
+              <span>{t("finance.colGrossTotal")}</span>
+              <span>{t("finance.colTotalPaid")}</span>
+              <span>{t("finance.colBalance")}</span>
+              <span className="text-right">{t("common.actions")}</span>
             </div>
-          ) : (
-            summaryList.map((s) => {
-              const initials = getInitials(s.staff_name)
-              const hasBalance = s.outstanding_balance > 0
 
-              return (
-                <div
-                  className="money-tr"
-                  key={s.staff_id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1.4fr 1fr 1fr 1.2fr 0.8fr 1.1fr 1fr 1.2fr 0.8fr",
-                    gap: "8px",
-                    alignItems: "center",
-                  }}
-                >
-                  <span className="client-cell">
-                    <span className="avatar small">{initials}</span>
-                    <strong>{s.staff_name}</strong>
-                  </span>
-                  <span>{formatModelBadge(s.model)}</span>
-                  <span>{formatRupiah(s.salary_earned)}</span>
-                  <span>
-                    <strong>{formatRupiah(s.commission_earned)}</strong>
-                    <small style={{ color: "var(--muted)", display: "block", fontSize: "9px" }}>
-                      {t("finance.jobs", { count: s.completed_jobs })}
-                    </small>
-                  </span>
-                  <span>{formatRupiah(s.tips_earned)}</span>
-                  <strong>{formatRupiah(s.gross_earnings)}</strong>
-                  <span style={{ color: "var(--muted)" }}>{formatRupiah(s.total_paid)}</span>
-                  <strong style={{ color: hasBalance ? "var(--forest, #2e7d32)" : "var(--ink)" }}>
-                    {formatRupiah(s.outstanding_balance)}
-                  </strong>
-                  <span style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className="filter-button mini"
-                      style={{ fontSize: "10px", padding: "4px 8px" }}
-                      disabled={!hasBalance}
-                      title={hasBalance ? (language === "id" ? "Cairkan komisi/gaji staf ini" : "Disburse payout for this barber") : (language === "id" ? "Tidak ada sisa saldo" : "No balance outstanding")}
-                      onClick={() => openPayoutForStaff(s.staff_id)}
-                    >
-                      {t("finance.payoutButton")}
-                    </button>
-                  </span>
-                </div>
-              )
-            })
-          )}
+            {summaryList.length === 0 ? (
+              <div className="py-9 px-4 text-center text-charcoal-muted text-xs">
+                {t("finance.noRecordsForPeriod")}
+              </div>
+            ) : (
+              summaryList.map((s) => {
+                const initials = getInitials(s.staff_name)
+                const hasBalance = s.outstanding_balance > 0
+
+                return (
+                  <div
+                    key={s.staff_id}
+                    className="grid grid-cols-[1.4fr_1fr_1fr_1.2fr_0.8fr_1.1fr_1fr_1.2fr_0.8fr] gap-2 py-3 border-b border-stone-line items-center text-xs text-charcoal-ink hover:bg-stone-50/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-charcoal-ink text-ivory-cream flex items-center justify-center text-[10px] font-bold shrink-0">
+                        {initials}
+                      </span>
+                      <strong className="text-xs font-semibold text-charcoal-ink">{s.staff_name}</strong>
+                    </span>
+                    <span>{formatModelBadge(s.model)}</span>
+                    <span className="font-mono text-xs">{formatRupiah(s.salary_earned)}</span>
+                    <div>
+                      <strong className="font-mono text-xs block">{formatRupiah(s.commission_earned)}</strong>
+                      <small className="text-charcoal-muted block text-[10px]">
+                        {t("finance.jobs", { count: s.completed_jobs })}
+                      </small>
+                    </div>
+                    <span className="font-mono text-xs">{formatRupiah(s.tips_earned)}</span>
+                    <strong className="font-mono text-xs">{formatRupiah(s.gross_earnings)}</strong>
+                    <span className="font-mono text-xs text-charcoal-muted">{formatRupiah(s.total_paid)}</span>
+                    <strong className={`font-mono text-xs ${hasBalance ? "text-forest" : "text-charcoal-ink"}`}>
+                      {formatRupiah(s.outstanding_balance)}
+                    </strong>
+                    <span className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasBalance}
+                        title={hasBalance ? (language === "id" ? "Cairkan komisi/gaji staf ini" : "Disburse payout for this barber") : (language === "id" ? "Tidak ada sisa saldo" : "No balance outstanding")}
+                        onClick={() => openPayoutForStaff(s.staff_id)}
+                      >
+                        {t("finance.payoutButton")}
+                      </Button>
+                    </span>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       ) : (
         /* Payout Ledger Table */
-        <div className="money-table" style={{ overflowX: "auto" }}>
-          <div
-            className="money-tr money-th"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.4fr 1.3fr 1.1fr 1.2fr 1fr 1.2fr",
-              gap: "8px",
-            }}
-          >
-            <span>{t("roles.barber")}</span>
-            <span>{t("finance.colPeriod")}</span>
-            <span>{t("finance.colMethod")}</span>
-            <span>{t("finance.colReferenceNote")}</span>
-            <span>{t("finance.colAmount")}</span>
-            <span style={{ textAlign: "right" }}>{t("common.status")}</span>
-          </div>
-
-          {payouts.length === 0 ? (
-            <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
-              {t("finance.noPayoutsYet")}
+        <div className="w-full overflow-x-auto border-t border-charcoal-ink">
+          <div className="min-w-[800px]">
+            <div className="grid grid-cols-[1.4fr_1.3fr_1.1fr_1.2fr_1fr_1.2fr] gap-2 py-3 border-b border-stone-line text-[10px] uppercase tracking-wider font-semibold text-charcoal-muted">
+              <span>{t("roles.barber")}</span>
+              <span>{t("finance.colPeriod")}</span>
+              <span>{t("finance.colMethod")}</span>
+              <span>{t("finance.colReferenceNote")}</span>
+              <span>{t("finance.colAmount")}</span>
+              <span className="text-right">{t("common.status")}</span>
             </div>
-          ) : (
-            payouts.map((p) => {
-              const initials = getInitials(p.staff_name || "Barber")
-              const isVoided = Boolean(p.voided_at)
-              const startDate = p.period_start ? p.period_start.split("T")[0] : ""
-              const endDate = p.period_end ? p.period_end.split("T")[0] : ""
-              const methodLabel =
-                p.payment_method === "cash"
-                  ? t("payment.cash")
-                  : p.payment_method === "transfer"
-                  ? t("payment.transfer")
-                  : (language === "id" ? "Lainnya" : "Other")
 
-              return (
-                <div
-                  className="money-tr"
-                  key={p.id}>
-                  <span className="client-cell">
-                    <span className="avatar small">{initials}</span>
-                    <strong>{p.staff_name || `Barber #${p.staff_id}`}</strong>
-                  </span>
-                  <span>
-                    {startDate} → {endDate}
-                  </span>
-                  <span>
-                    <Badge tone="neutral">{methodLabel}</Badge>
-                  </span>
-                  <span>
-                    {p.reference_number && (
-                      <code style={{ fontSize: "10px", fontWeight: 600, display: "block" }}>
-                        {p.reference_number}
-                      </code>
-                    )}
-                    <span style={{ color: "var(--muted)", fontSize: "10px" }}>{p.note || (language === "id" ? "Pencairan" : "Payout")}</span>
-                  </span>
-                  <strong style={{ textDecoration: isVoided ? "line-through" : "none" }}>
-                    {formatRupiah(p.amount)}
-                  </strong>
-                  <span style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
-                    <Badge tone={isVoided ? "neutral" : "success"}>
-                      {isVoided ? t("finance.voided") : t("finance.activePayout")}
-                    </Badge>
-                    {!isVoided && (
-                      <button
-                        type="button"
-                        className="filter-button mini"
-                        style={{ fontSize: "9px", padding: "2px 6px" }}
-                        onClick={() => handleVoidPayout(p.id)}
-                      >
-                        {t("finance.voidButton")}
-                      </button>
-                    )}
-                  </span>
-                </div>
-              )
-            })
-          )}
+            {payouts.length === 0 ? (
+              <div className="py-9 px-4 text-center text-charcoal-muted text-xs">
+                {t("finance.noPayoutsYet")}
+              </div>
+            ) : (
+              payouts.map((p) => {
+                const initials = getInitials(p.staff_name || "Barber")
+                const isVoided = Boolean(p.voided_at)
+                const startDate = p.period_start ? p.period_start.split("T")[0] : ""
+                const endDate = p.period_end ? p.period_end.split("T")[0] : ""
+                const methodLabel =
+                  p.payment_method === "cash"
+                    ? t("payment.cash")
+                    : p.payment_method === "transfer"
+                    ? t("payment.transfer")
+                    : (language === "id" ? "Lainnya" : "Other")
+
+                return (
+                  <div
+                    key={p.id}
+                    className="grid grid-cols-[1.4fr_1.3fr_1.1fr_1.2fr_1fr_1.2fr] gap-2 py-3 border-b border-stone-line items-center text-xs text-charcoal-ink hover:bg-stone-50/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-charcoal-ink text-ivory-cream flex items-center justify-center text-[10px] font-bold shrink-0">
+                        {initials}
+                      </span>
+                      <strong className="text-xs font-semibold text-charcoal-ink">{p.staff_name || `Barber #${p.staff_id}`}</strong>
+                    </span>
+                    <span className="text-xs text-charcoal-muted">
+                      {startDate} → {endDate}
+                    </span>
+                    <span>
+                      <Badge tone="neutral">{methodLabel}</Badge>
+                    </span>
+                    <div>
+                      {p.reference_number && (
+                        <code className="text-[10px] font-mono font-semibold block text-charcoal-ink">
+                          {p.reference_number}
+                        </code>
+                      )}
+                      <span className="text-charcoal-muted text-xs">{p.note || (language === "id" ? "Pencairan" : "Payout")}</span>
+                    </div>
+                    <strong className={`font-mono text-xs ${isVoided ? "line-through text-charcoal-muted" : "text-charcoal-ink"}`}>
+                      {formatRupiah(p.amount)}
+                    </strong>
+                    <span className="flex items-center gap-2 justify-end">
+                      <Badge tone={isVoided ? "neutral" : "success"}>
+                        {isVoided ? t("finance.voided") : t("finance.activePayout")}
+                      </Badge>
+                      {!isVoided && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleVoidPayout(p.id)}
+                        >
+                          {t("finance.voidButton")}
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       )}
 
       {/* Payout Disbursement Modal */}
-      {isPayoutModalOpen && (
-        <div className="modal-backdrop" onMouseDown={() => setIsPayoutModalOpen(false)}>
-          <div
-            className="modal"
-            onMouseDown={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="payout-modal-title"
-            style={{ maxWidth: "520px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
+      <Modal
+        isOpen={isPayoutModalOpen}
+        onClose={() => setIsPayoutModalOpen(false)}
+        size="md"
+      >
+        <ModalHeader>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-charcoal-muted font-bold block mb-1">
+              {t("finance.periodRange")}
+            </span>
+            <ModalTitle id="payout-modal-title">{t("finance.recordPayoutTitle")}</ModalTitle>
+          </div>
+          <button
+            type="button"
+            className="text-charcoal-muted hover:text-charcoal-ink p-1 rounded-sm text-lg leading-none"
+            onClick={() => setIsPayoutModalOpen(false)}
+            aria-label={t("common.close")}
           >
-            <div className="modal-head">
-              <div>
-                <span className="section-index">{t("finance.periodRange")}</span>
-                <h2 id="payout-modal-title">{t("finance.recordPayoutTitle")}</h2>
-              </div>
-              <button
-                className="icon-button"
-                onClick={() => setIsPayoutModalOpen(false)}
-                aria-label={t("common.close")}
-              >
-                ×
-              </button>
+            ×
+          </button>
+        </ModalHeader>
+
+        <ModalBody>
+          {payoutError && (
+            <div
+              className="p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2 mb-3"
+              role="alert"
+            >
+              <Icon name="bell" size={16} />
+              <span>{payoutError}</span>
             </div>
+          )}
 
-            {payoutError && (
-              <div
-                className="login-error-alert"
-                role="alert"
-                style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
-              >
-                <Icon name="bell" size={16} />
-                <span>{payoutError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreatePayout}>
-              <div className="form-grid">
-                <label className="full">
-                  {t("finance.staffBarber")}
-                  <select
-                    value={modalStaffId}
-                    onChange={(e) => {
-                      const id = Number(e.target.value)
-                      setModalStaffId(id)
-                      setUserHasEditedAmount(false)
-                      checkModalBalance(id, modalPeriodStart, modalPeriodEnd, true)
-                    }}
-                    required
-                  >
-                    {staffList.map((st) => (
-                      <option value={st.id} key={st.id}>
-                        {st.name} ({st.contact || t("roles.staff")})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  {t("finance.periodStart")}
-                  <input
-                    type="date"
-                    value={modalPeriodStart}
-                    onChange={(e) => {
-                      setModalPeriodStart(e.target.value)
-                      if (modalStaffId) {
-                        checkModalBalance(Number(modalStaffId), e.target.value, modalPeriodEnd, false)
-                      }
-                    }}
-                    required
-                  />
-                </label>
-
-                <label>
-                  {t("finance.periodEnd")}
-                  <input
-                    type="date"
-                    value={modalPeriodEnd}
-                    onChange={(e) => {
-                      setModalPeriodEnd(e.target.value)
-                      if (modalStaffId) {
-                        checkModalBalance(Number(modalStaffId), modalPeriodStart, e.target.value, false)
-                      }
-                    }}
-                    required
-                  />
-                </label>
-
-                {/* Real-time Barber Balance Info Card */}
-                <div
-                  className="full"
-                  style={{
-                    background: "var(--paper)",
-                    border: "1px solid var(--line)",
-                    padding: "12px",
-                    fontSize: "11px",
+          <form id="payout-form" onSubmit={handleCreatePayout} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <label className="sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("finance.staffBarber")}
+                <select
+                  value={modalStaffId}
+                  onChange={(e) => {
+                    const id = Number(e.target.value)
+                    setModalStaffId(id)
+                    setUserHasEditedAmount(false)
+                    checkModalBalance(id, modalPeriodStart, modalPeriodEnd, true)
                   }}
+                  required
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 600 }}>{t("finance.earningsAndBalance")}</span>
-                    {isCheckingBalance && <span style={{ color: "var(--muted)" }}>{t("finance.checkingBalance")}</span>}
-                  </div>
-                  {staffBalanceInfo ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginTop: "6px" }}>
-                      <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.grossEarnings")}</div>
-                        <strong>{formatRupiah(staffBalanceInfo.gross)}</strong>
-                      </div>
-                      <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.alreadyPaid")}</div>
-                        <strong>{formatRupiah(staffBalanceInfo.paid)}</strong>
-                      </div>
-                      <div>
-                        <div style={{ color: "var(--muted)", fontSize: "9px" }}>{t("finance.outstandingBalance")}</div>
-                        <strong
-                          style={{
-                            color: staffBalanceInfo.balance > 0 ? "var(--forest, #2e7d32)" : "var(--ink)",
-                          }}
-                        >
-                          {formatRupiah(staffBalanceInfo.balance)}
-                        </strong>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ color: "var(--muted)" }}>
-                      {language === "id"
-                        ? "Pilih kapster dan rentang tanggal untuk melihat saldo."
-                        : "Select a barber and date range to inspect balance."}
-                    </div>
+                  {staffList.map((st) => (
+                    <option value={st.id} key={st.id}>
+                      {st.name} ({st.contact || t("roles.staff")})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("finance.periodStart")}
+                <input
+                  type="date"
+                  value={modalPeriodStart}
+                  onChange={(e) => {
+                    setModalPeriodStart(e.target.value)
+                    if (modalStaffId) {
+                      checkModalBalance(Number(modalStaffId), e.target.value, modalPeriodEnd, false)
+                    }
+                  }}
+                  required
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("finance.periodEnd")}
+                <input
+                  type="date"
+                  value={modalPeriodEnd}
+                  onChange={(e) => {
+                    setModalPeriodEnd(e.target.value)
+                    if (modalStaffId) {
+                      checkModalBalance(Number(modalStaffId), modalPeriodStart, e.target.value, false)
+                    }
+                  }}
+                  required
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
+                />
+              </label>
+
+              {/* Real-time Barber Balance Info Card */}
+              <div className="sm:col-span-2 bg-ivory-paper border border-stone-line p-3 text-xs rounded-sm">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-charcoal-muted font-semibold text-[10px] uppercase tracking-wider">
+                    {t("finance.earningsAndBalance")}
+                  </span>
+                  {isCheckingBalance && (
+                    <span className="text-charcoal-muted text-[10px]">{t("finance.checkingBalance")}</span>
                   )}
                 </div>
-
-                <label className="full">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                    <span>{t("finance.disbursementAmount")}</span>
-                    {staffBalanceInfo && staffBalanceInfo.balance > 0 && (
-                      <button
-                        type="button"
-                        className="filter-button"
-                        style={{ fontSize: "11px", padding: "2px 8px" }}
-                        onClick={() => {
-                          setUserHasEditedAmount(true)
-                          setAmountInput(String(staffBalanceInfo.balance))
-                          setPayoutError(null)
-                        }}
+                {staffBalanceInfo ? (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div>
+                      <div className="text-charcoal-muted text-[10px]">{t("finance.grossEarnings")}</div>
+                      <strong className="font-mono text-xs">{formatRupiah(staffBalanceInfo.gross)}</strong>
+                    </div>
+                    <div>
+                      <div className="text-charcoal-muted text-[10px]">{t("finance.alreadyPaid")}</div>
+                      <strong className="font-mono text-xs">{formatRupiah(staffBalanceInfo.paid)}</strong>
+                    </div>
+                    <div>
+                      <div className="text-charcoal-muted text-[10px]">{t("finance.outstandingBalance")}</div>
+                      <strong
+                        className={`font-mono text-xs ${
+                          staffBalanceInfo.balance > 0 ? "text-forest" : "text-charcoal-ink"
+                        }`}
                       >
-                        {t("finance.setFullBalance", { balance: formatRupiah(staffBalanceInfo.balance) })}
-                      </button>
-                    )}
+                        {formatRupiah(staffBalanceInfo.balance)}
+                      </strong>
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="e.g. 1.500.000 or 1500000"
-                    value={amountInput}
-                    onChange={(e) => {
-                      setUserHasEditedAmount(true)
-                      setAmountInput(e.target.value)
-                      setPayoutError(null)
-                    }}
-                    required
-                  />
-                  {parsedAmountResult?.valid && (
-                    <small style={{ color: "var(--ink)", fontSize: "11px", marginTop: "4px", display: "block" }}>
-                      {language === "id" ? "Nominal pencairan:" : "Disbursement:"} <strong>{formatRupiah(parsedAmountResult.amount)}</strong>
-                    </small>
+                ) : (
+                  <div className="text-charcoal-muted text-xs">
+                    {language === "id"
+                      ? "Pilih kapster dan rentang tanggal untuk melihat saldo."
+                      : "Select a barber and date range to inspect balance."}
+                  </div>
+                )}
+              </div>
+
+              <label className="sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                <div className="flex justify-between items-center mb-0.5">
+                  <span>{t("finance.disbursementAmount")}</span>
+                  {staffBalanceInfo && staffBalanceInfo.balance > 0 && (
+                    <button
+                      type="button"
+                      className="text-[11px] px-2 py-0.5 border border-stone-line rounded-sm hover:border-copper text-charcoal-ink hover:text-copper transition-colors"
+                      onClick={() => {
+                        setUserHasEditedAmount(true)
+                        setAmountInput(String(staffBalanceInfo.balance))
+                        setPayoutError(null)
+                      }}
+                    >
+                      {t("finance.setFullBalance", { balance: formatRupiah(staffBalanceInfo.balance) })}
+                    </button>
                   )}
-                  {parsedAmountResult && !parsedAmountResult.valid && (
-                    <small style={{ color: "var(--red, #cf3c3c)", fontSize: "11px", marginTop: "4px", display: "block" }}>
-                      {parsedAmountResult.error}
-                    </small>
-                  )}
-                  <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
-                    {t("finance.amountHelper")}
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 1.500.000 or 1500000"
+                  value={amountInput}
+                  onChange={(e) => {
+                    setUserHasEditedAmount(true)
+                    setAmountInput(e.target.value)
+                    setPayoutError(null)
+                  }}
+                  required
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
+                />
+                {parsedAmountResult?.valid && (
+                  <small className="text-charcoal-ink text-xs mt-1 block">
+                    {language === "id" ? "Nominal pencairan:" : "Disbursement:"} <strong>{formatRupiah(parsedAmountResult.amount)}</strong>
                   </small>
-                </label>
+                )}
+                {parsedAmountResult && !parsedAmountResult.valid && (
+                  <small className="text-danger text-xs mt-1 block">
+                    {parsedAmountResult.error}
+                  </small>
+                )}
+                <small className="text-charcoal-muted text-[10px] mt-0.5 block">
+                  {t("finance.amountHelper")}
+                </small>
+              </label>
 
-                <label>
-                  {t("payment.method")}
-                  <select
-                    value={modalMethod}
-                    onChange={(e) => setModalMethod(e.target.value as "transfer" | "cash" | "other")}
-                  >
-                    <option value="transfer">{t("payment.transfer")}</option>
-                    <option value="cash">{t("payment.cash")}</option>
-                    <option value="other">{language === "id" ? "Lainnya" : "Other"}</option>
-                  </select>
-                </label>
-
-                <label>
-                  {t("finance.referenceNumber")}
-                  <input
-                    placeholder={t("finance.referencePlaceholder")}
-                    value={modalRefNumber}
-                    onChange={(e) => setModalRefNumber(e.target.value)}
-                  />
-                </label>
-
-                <label className="full">
-                  {t("finance.disbursementNote")}
-                  <input
-                    placeholder={t("finance.notePlaceholder")}
-                    value={modalNote}
-                    onChange={(e) => setModalNote(e.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="modal-actions" style={{ marginTop: "24px" }}>
-                <button
-                  type="button"
-                  className="filter-button"
-                  onClick={() => setIsPayoutModalOpen(false)}
-                  disabled={isSubmittingPayout}
+              <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("payment.method")}
+                <select
+                  value={modalMethod}
+                  onChange={(e) => setModalMethod(e.target.value as "transfer" | "cash" | "other")}
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                 >
-                  {t("common.cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={isSubmittingPayout || !modalStaffId || !amountInput.trim() || (parsedAmountResult != null && !parsedAmountResult.valid)}
-                >
-                  {isSubmittingPayout ? t("finance.disbursing") : t("finance.disbursePayout")}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                  <option value="transfer">{t("payment.transfer")}</option>
+                  <option value="cash">{t("payment.cash")}</option>
+                  <option value="other">{language === "id" ? "Lainnya" : "Other"}</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("finance.referenceNumber")}
+                <input
+                  placeholder={t("finance.referencePlaceholder")}
+                  value={modalRefNumber}
+                  onChange={(e) => setModalRefNumber(e.target.value)}
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
+                />
+              </label>
+
+              <label className="sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
+                {t("finance.disbursementNote")}
+                <input
+                  placeholder={t("finance.notePlaceholder")}
+                  value={modalNote}
+                  onChange={(e) => setModalNote(e.target.value)}
+                  className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
+                />
+              </label>
+            </div>
+          </form>
+        </ModalBody>
+
+        <ModalFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsPayoutModalOpen(false)}
+            disabled={isSubmittingPayout}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="submit"
+            form="payout-form"
+            variant="primary"
+            isLoading={isSubmittingPayout}
+            disabled={isSubmittingPayout || !modalStaffId || !amountInput.trim() || (parsedAmountResult != null && !parsedAmountResult.valid)}
+          >
+            {isSubmittingPayout ? t("finance.disbursing") : t("finance.disbursePayout")}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }

@@ -18,6 +18,7 @@ import {
   getIsoWithTimezone,
 } from "../lib/format"
 import { Icon } from "./ui/Icon"
+import { Button } from "./ui/Button"
 import { useI18n } from "../lib/i18n"
 import { useToast } from "../hooks/useToast"
 
@@ -491,17 +492,17 @@ export function BookingModal({
   const displayedBarbers = availabilityList.length > 0 ? availabilityList : staff
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/70 backdrop-blur-[1px] grid place-items-center p-4 overflow-y-auto" onMouseDown={onClose}>
       <div
-        className="modal"
+        className="modal w-full max-w-lg bg-ivory-paper border border-stone-line shadow-2xl p-6 rounded-sm text-charcoal-ink my-auto"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
-        <div className="modal-head">
+        <div className="modal-head flex items-start justify-between gap-4 mb-4">
           <div>
-            <span className="section-index">
+            <span className="section-index text-[10px] uppercase tracking-wider text-charcoal-muted font-bold block mb-0.5">
               {isWalkin
                 ? language === "id"
                   ? "ANTREAN WALK-IN"
@@ -510,27 +511,22 @@ export function BookingModal({
                   ? "RESERVASI JANJI TEMU"
                   : "APPOINTMENT BOOKING"}
             </span>
-            <h2 id="modal-title">
+            <h2 id="modal-title" className="font-serif text-2xl text-charcoal-ink">
               {isWalkin ? t("booking.titleWalkin") : t("booking.titleAppointment")}
             </h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
+          <button
+            type="button"
+            className="icon-button text-charcoal-muted hover:text-charcoal-ink p-1 rounded-sm text-2xl leading-none"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
             ×
           </button>
         </div>
 
         {isPastDate && (
-          <div
-            style={{
-              background: "#f7f7f5",
-              border: "1px solid #e2e0d8",
-              padding: "8px 12px",
-              borderRadius: "4px",
-              marginBottom: "16px",
-              fontSize: "11px",
-              color: "#555",
-            }}
-          >
+          <div className="bg-stone-100 border border-stone-line p-2.5 rounded-sm mb-4 text-xs text-charcoal-muted">
             ℹ️ <strong>{language === "id" ? "Tanggal lampau dipilih:" : "Historical date selected:"}</strong>{" "}
             {language === "id"
               ? `Janji temu ini dijadwalkan untuk tanggal yang telah lewat (${appointmentDate}). Pemeriksaan bentrok jadwal tetap berlaku.`
@@ -539,48 +535,42 @@ export function BookingModal({
         )}
 
         {errorMessage && (
-          <div className="login-error-alert" role="alert" style={{ marginBottom: "16px" }}>
+          <div className="login-error-alert p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2 mb-4" role="alert">
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {conflictPrompt && (
-          <div
-            style={{
-              background: "#fef8ee",
-              border: "1px solid #f3d49e",
-              padding: "14px",
-              borderRadius: "4px",
-              marginBottom: "16px",
-            }}
-          >
-            <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--amber)", lineHeight: 1.4 }}>
+          <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-sm mb-4">
+            <p className="m-0 mb-3 text-xs text-amber leading-relaxed">
               <strong>{language === "id" ? "Bentrok Terdeteksi:" : "Overlap Detected:"}</strong> {conflictPrompt}
             </p>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button
+            <div className="flex gap-2 justify-end">
+              <Button
                 type="button"
-                className="filter-button"
+                variant="outline"
+                size="sm"
                 onClick={() => setConflictPrompt(null)}
               >
                 {t("common.cancel")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="primary-button"
+                variant="primary"
+                size="sm"
                 onClick={(e) => handleSubmit(e, true)}
                 disabled={isSubmitting}
               >
                 {language === "id" ? "Tetap Jadwalkan (Abaikan)" : "Override & Book"}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         <form onSubmit={(e) => handleSubmit(e, false)}>
-          <div className="form-grid">
-            <label className="full">
+          <div className="form-grid grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-4">
+            <label className="full sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
               {t("booking.clientName")}
               <input
                 autoFocus
@@ -595,25 +585,14 @@ export function BookingModal({
                   setSelectedCustomerId(null)
                 }}
                 required
+                className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               />
             </label>
 
             {/* Quick customer matches */}
             {customerName.length >= 2 && !selectedCustomerId && (
-              <div
-                className="full"
-                style={{
-                  maxHeight: "100px",
-                  overflowY: "auto",
-                  border: "1px solid var(--line)",
-                  background: "var(--paper-2)",
-                  padding: "4px 8px",
-                  borderRadius: "3px",
-                  marginTop: "-8px",
-                  marginBottom: "8px",
-                }}
-              >
-                <small style={{ display: "block", color: "var(--muted)", marginBottom: "4px" }}>
+              <div className="full sm:col-span-2 max-h-24 overflow-y-auto border border-stone-line bg-stone-50 p-2 rounded-sm -mt-2 mb-2">
+                <small className="block text-charcoal-muted text-[10px] mb-1">
                   {language === "id"
                     ? "Pelanggan Terdaftar (Klik untuk isi otomatis):"
                     : "Existing Clients (Click to auto-fill):"}
@@ -626,38 +605,31 @@ export function BookingModal({
                       key={c.id}
                       type="button"
                       onClick={() => handleSelectCustomer(c)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "4px 6px",
-                        background: "none",
-                        border: "none",
-                        fontSize: "11px",
-                        cursor: "pointer",
-                      }}
+                      className="block w-full text-left py-1 px-1.5 hover:bg-stone-200/60 text-xs rounded-xs transition-colors"
                     >
-                      <strong>{c.name}</strong> {c.phone ? `(${c.phone})` : ""}
+                      <strong className="text-charcoal-ink font-semibold">{c.name}</strong> {c.phone ? `(${c.phone})` : ""}
                     </button>
                   ))}
               </div>
             )}
 
-            <label className="full">
+            <label className="full sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
               {t("booking.clientPhone")}
               <input
                 placeholder={language === "id" ? "cth. 08123456789 atau +628123456789" : "e.g. 08123456789 or +628123456789"}
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
+                className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               />
             </label>
 
-            <label className="full">
+            <label className="full sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
               {t("booking.selectServices")}
               <select
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(Number(e.target.value))}
                 required
+                className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               >
                 {services.length === 0 ? (
                   <option value="">
@@ -675,28 +647,30 @@ export function BookingModal({
 
             {!isWalkin && (
               <>
-                <label>
+                <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                   {t("booking.date")}
                   <input
                     type="date"
                     value={appointmentDate}
                     onChange={(e) => setAppointmentDate(e.target.value)}
                     required
+                    className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
                   />
                 </label>
-                <label>
+                <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                   {t("booking.time")}
                   <input
                     type="time"
                     value={appointmentTime}
                     onChange={(e) => setAppointmentTime(e.target.value)}
                     required
+                    className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
                   />
                 </label>
               </>
             )}
 
-            <label className="full">
+            <label className="full sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
               {t("booking.barber")}
               <select
                 value={selectedStaffId}
@@ -704,6 +678,7 @@ export function BookingModal({
                   setSelectedStaffId(e.target.value === "" ? "" : Number(e.target.value))
                 }
                 required={!isWalkin}
+                className="w-full border border-stone-line bg-white px-3 py-2 text-xs rounded-sm text-charcoal-ink focus:outline-none focus:border-copper"
               >
                 {isWalkin ? (
                   <option value="">{t("booking.anyBarber")}</option>
@@ -734,39 +709,23 @@ export function BookingModal({
                 })}
               </select>
               {isLoadingAvailability && (
-                <small
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: "11px",
-                    marginTop: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span className="btn-spinner" style={{ width: "10px", height: "10px" }} />{" "}
+                <small className="text-charcoal-muted text-[11px] mt-1 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full border-2 border-copper border-t-transparent animate-spin inline-block" />{" "}
                   {language === "id" ? "Memeriksa ketersediaan kapster..." : "Checking barber availability..."}
                 </small>
               )}
               {availabilityError && (
-                <div style={{ color: "var(--danger)", fontSize: "11px", marginTop: "4px" }}>
+                <div className="text-danger text-[11px] mt-1">
                   ⚠️ {availabilityError}
                 </div>
               )}
               {staffValidationMessage && (
                 <div
-                  style={{
-                    background: shopClosedReason ? "rgba(207, 60, 60, 0.1)" : "#fef8ee",
-                    border: shopClosedReason
-                      ? "1px solid rgba(207, 60, 60, 0.35)"
-                      : "1px solid #f3d49e",
-                    borderRadius: "4px",
-                    padding: "8px 10px",
-                    marginTop: "6px",
-                    color: shopClosedReason ? "var(--danger)" : "#75521e",
-                    fontSize: "11px",
-                    lineHeight: "1.4",
-                  }}
+                  className={`p-2 rounded-sm mt-1.5 text-xs leading-relaxed border ${
+                    shopClosedReason
+                      ? "bg-red-50/80 border-red-300 text-danger"
+                      : "bg-amber-50/80 border-amber-300 text-[#75521e]"
+                  }`}
                 >
                   ⚠️ {staffValidationMessage}
                 </div>
@@ -774,27 +733,23 @@ export function BookingModal({
             </label>
           </div>
 
-          <div className="modal-actions">
-            <button
+          <div className="modal-actions flex justify-end gap-2 pt-3 border-t border-stone-line mt-4">
+            <Button
               type="button"
-              className="filter-button"
+              variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
             >
               {t("common.cancel")}
-            </button>
-            <button type="submit" className="primary-button" disabled={isSubmitDisabled}>
-              {isSubmitting ? (
-                <>
-                  <span className="btn-spinner" />
-                  <span>{t("common.saving")}</span>
-                </>
-              ) : isWalkin ? (
-                t("booking.confirmWalkin")
-              ) : (
-                t("booking.confirmBooking")
-              )}
-            </button>
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isSubmitDisabled}
+              isLoading={isSubmitting}
+            >
+              {isWalkin ? t("booking.confirmWalkin") : t("booking.confirmBooking")}
+            </Button>
           </div>
         </form>
       </div>

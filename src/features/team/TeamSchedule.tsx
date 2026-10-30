@@ -12,6 +12,7 @@ import {
   ApiError,
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
+import { Button } from "../../components/ui/Button"
 import { Icon } from "../../components/ui/Icon"
 import {
   getInitials,
@@ -120,7 +121,7 @@ export function TeamSchedule({
     } finally {
       setIsLoading(false)
     }
-  }, [staff.id, dateStr, currentDate])
+  }, [staff.id, dateStr, currentDate, timezone])
 
   useEffect(() => {
     if (activeTab === "agenda") {
@@ -158,7 +159,6 @@ export function TeamSchedule({
       }
       setWeeklyMap(map)
       setIsWeeklyDirty(false)
-      setWeeklyConflicts(null)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setWeeklyError(err.message)
@@ -174,7 +174,8 @@ export function TeamSchedule({
     }
   }, [activeTab, loadWeeklyHours])
 
-  const handleToggleWorkDay = (day: number, isWorking: boolean) => {
+  const handleToggleWorkDay = (day: number, checked: boolean) => {
+    if (!canManageSchedule) return
     setWeeklyMap((prev) => ({
       ...prev,
       [day]: {
@@ -184,7 +185,7 @@ export function TeamSchedule({
           open_time: "09:00:00",
           close_time: "21:00:00",
         }),
-        is_working: isWorking,
+        is_working: checked,
       },
     }))
     setIsWeeklyDirty(true)
@@ -192,6 +193,7 @@ export function TeamSchedule({
   }
 
   const handleWeeklyTimeChange = (day: number, field: "open_time" | "close_time", val: string) => {
+    if (!canManageSchedule) return
     setWeeklyMap((prev) => ({
       ...prev,
       [day]: {
@@ -348,46 +350,53 @@ export function TeamSchedule({
       setExceptionError(language === "id" ? "Tanggal mulai dan selesai wajib diisi." : "Start and end dates are required.")
       return
     }
+
     if (excEndDate < excStartDate) {
-      setExceptionError(
-        language === "id"
-          ? "Tanggal selesai harus sama atau setelah tanggal mulai."
-          : "End date must be on or after start date."
-      )
-      return
-    }
-    if (excIsWorking && excOpenTime >= excCloseTime) {
-      setExceptionError(
-        language === "id"
-          ? "Jam selesai harus setelah jam mulai."
-          : "End time must be after start time."
-      )
+      setExceptionError(language === "id" ? "Tanggal selesai tidak boleh sebelum tanggal mulai." : "End date cannot be earlier than start date.")
       return
     }
 
+    if (excIsWorking) {
+      const o = excOpenTime
+      const c = excCloseTime
+      if (o >= c) {
+        setExceptionError(language === "id" ? "Jam tutup harus lebih malam dari jam buka." : "Close time must be after open time.")
+        return
+      }
+    }
+
     setIsSavingException(true)
+
     try {
-      const payload = {
-        start_date: excStartDate,
-        end_date: excEndDate,
-        is_working: excIsWorking,
-        open_time: excIsWorking ? formatTimeApi(excOpenTime, "10:00:00") : null,
-        close_time: excIsWorking ? formatTimeApi(excCloseTime, "18:00:00") : null,
-        reason: excReason.trim(),
-        confirm_conflicts: confirmConflicts,
-      }
       if (editingException) {
-        await staffApi.updateException(staff.id, editingException.id, payload)
+        await staffApi.updateException(staff.id, editingException.id, {
+          start_date: excStartDate,
+          end_date: excEndDate,
+          is_working: excIsWorking,
+          open_time: excIsWorking ? formatTimeApi(excOpenTime) : undefined,
+          close_time: excIsWorking ? formatTimeApi(excCloseTime) : undefined,
+          reason: excReason.trim() || undefined,
+          confirm_conflicts: confirmConflicts,
+        })
       } else {
-        await staffApi.createException(staff.id, payload)
+        await staffApi.createException(staff.id, {
+          start_date: excStartDate,
+          end_date: excEndDate,
+          is_working: excIsWorking,
+          open_time: excIsWorking ? formatTimeApi(excOpenTime) : undefined,
+          close_time: excIsWorking ? formatTimeApi(excCloseTime) : undefined,
+          reason: excReason.trim() || undefined,
+          confirm_conflicts: confirmConflicts,
+        })
       }
+
       setIsExceptionFormOpen(false)
       setEditingException(null)
       setExcConflicts(null)
-      await loadExceptions()
-      const msg = t("availability.exceptionSavedToast")
+      const msg = t("availability.exceptionSavedToast", { name: staff.name })
       toast.success(msg)
       onUpdated?.(msg)
+      loadExceptions()
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "existing_bookings_conflict" && err.details) {
         setExcConflicts(err.details as BookingConflictDetails)
@@ -400,78 +409,78 @@ export function TeamSchedule({
     }
   }
 
-  const handleDeleteException = async (excId: number) => {
+  const handleDeleteException = async (exceptionId: number) => {
     if (!canManageSchedule) return
+    const confirmMsg = language === "id" ? "Hapus pengecualian jadwal ini?" : "Delete this schedule exception?"
+    if (!confirm(confirmMsg)) return
+
     try {
-      await staffApi.deleteException(staff.id, excId)
-      await loadExceptions()
+      await staffApi.deleteException(staff.id, exceptionId)
       const msg = t("availability.exceptionDeletedToast")
       toast.success(msg)
       onUpdated?.(msg)
+      loadExceptions()
     } catch (err: unknown) {
       if (err instanceof Error) {
-        setExceptionError(err.message)
         toast.error(err.message)
       }
     }
   }
 
   const handlePrevDay = () => {
-    setCurrentDate((prev) => {
-      const next = new Date(prev)
-      next.setDate(next.getDate() - 1)
-      return next
-    })
+    const next = new Date(currentDate)
+    next.setDate(next.getDate() - 1)
+    setCurrentDate(next)
   }
 
   const handleNextDay = () => {
-    setCurrentDate((prev) => {
-      const next = new Date(prev)
-      next.setDate(next.getDate() + 1)
-      return next
-    })
+    const next = new Date(currentDate)
+    next.setDate(next.getDate() + 1)
+    setCurrentDate(next)
   }
+
+  const dateHeading = currentDate.toLocaleDateString(language === "id" ? "id-ID" : "en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  })
 
   const initials = getInitials(staff.name)
   const isOff = schedule ? !schedule.is_open : false
+  const activeAppts = appointments.filter((a) => a.status !== "cancelled")
 
-  // Calculate workload metrics
-  const activeAppts = appointments.filter((a) => a.status !== "cancelled" && a.status !== "no_show")
-  const totalBookedMinutes = activeAppts.reduce((sum, a) => sum + (a.duration_snapshot_min || 30), 0)
-  const clientHours = Math.floor(totalBookedMinutes / 60)
-  const clientMinutes = totalBookedMinutes % 60
-  const clientTimeFormatted = clientHours > 0 ? `${clientHours}h ${clientMinutes}m` : `${clientMinutes}m`
-
-  const dateHeading = currentDate.toLocaleDateString(
-    language === "id" ? "id-ID" : "en-US",
-    {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      timeZone: timezone,
-    }
-  )
+  const totalMinutes = activeAppts.reduce((sum, a) => sum + (a.duration_snapshot_min || 30), 0)
+  const hoursPart = Math.floor(totalMinutes / 60)
+  const minsPart = totalMinutes % 60
+  const clientTimeFormatted = `${hoursPart}j ${minsPart}m`
 
   return (
-    <div className="team-schedule-backdrop" onMouseDown={onClose}>
+    <div
+      className="team-schedule-backdrop fixed inset-0 z-modal bg-charcoal/60 flex justify-end"
+      onMouseDown={onClose}
+    >
       <aside
-        className="team-schedule-drawer"
-        onMouseDown={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="team-schedule-title"
+        className="team-schedule-drawer w-full max-w-[520px] h-full bg-ivory-light border-l border-stone shadow-modal p-6 overflow-y-auto flex flex-col"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="modal-head">
-          <div className="schedule-profile">
-            <span className="avatar portrait">{initials}</span>
-            <div>
-              <span className="section-index">{t("team.scheduleTab").toUpperCase()}</span>
-              <h2 id="team-schedule-title">{staff.name}</h2>
-              <p>{staff.contact || (staff.active ? t("common.active") : t("common.inactive"))}</p>
-            </div>
+        {/* Profile Header */}
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-charcoal text-ivory-light flex items-center justify-center font-serif text-lg font-bold shrink-0">
+            {initials}
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-muted-text font-bold block mb-0.5">
+              {staff.role === "manager"
+                ? t("roles.manager")
+                : staff.role === "owner"
+                ? t("roles.owner")
+                : t("roles.barber")}
+            </span>
+            <h2 className="font-serif text-2xl text-charcoal">{staff.name}</h2>
           </div>
           <button
-            className="icon-button"
+            type="button"
+            className="ml-auto text-muted-text hover:text-charcoal p-1 rounded-sm text-2xl leading-none cursor-pointer"
             onClick={onClose}
             aria-label={t("common.close")}
           >
@@ -480,72 +489,76 @@ export function TeamSchedule({
         </div>
 
         {/* Navigation Tabs */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "6px",
-            marginTop: "18px",
-            paddingBottom: "12px",
-            borderBottom: "1px solid var(--line)",
-          }}
-        >
-          <button
+        <div className="grid grid-cols-3 gap-2 mt-4 pb-3 border-b border-stone">
+          <Button
             type="button"
-            className={activeTab === "agenda" ? "primary-button" : "filter-button"}
-            style={{ justifyContent: "center", fontSize: "11px", padding: "8px 6px" }}
+            variant={activeTab === "agenda" ? "primary" : "outline"}
+            size="sm"
+            className="w-full justify-center text-xs"
             onClick={() => setActiveTab("agenda")}
           >
             {t("availability.tabAgenda")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={activeTab === "weekly" ? "primary-button" : "filter-button"}
-            style={{ justifyContent: "center", fontSize: "11px", padding: "8px 6px" }}
+            variant={activeTab === "weekly" ? "primary" : "outline"}
+            size="sm"
+            className="w-full justify-center text-xs"
             onClick={() => setActiveTab("weekly")}
           >
             {t("availability.tabWeekly")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={activeTab === "exceptions" ? "primary-button" : "filter-button"}
-            style={{ justifyContent: "center", fontSize: "11px", padding: "8px 6px" }}
+            variant={activeTab === "exceptions" ? "primary" : "outline"}
+            size="sm"
+            className="w-full justify-center text-xs"
             onClick={() => setActiveTab("exceptions")}
           >
             {t("availability.tabExceptions")}
-          </button>
+          </Button>
         </div>
 
         {/* === TAB 1: DAILY AGENDA === */}
         {activeTab === "agenda" && (
           <>
-            <div className="schedule-datebar">
-              <button onClick={handlePrevDay} aria-label="Previous day">
+            <div className="grid grid-cols-[34px_1fr_34px] items-center gap-2 border-y border-stone py-3 my-4">
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center border border-stone bg-ivory hover:bg-stone/20 text-charcoal rounded-sm text-sm cursor-pointer transition-colors"
+                onClick={handlePrevDay}
+                aria-label="Previous day"
+              >
                 ‹
               </button>
-              <div>
-                <strong>{dateHeading}</strong>
-                <small>
+              <div className="text-center">
+                <strong className="font-serif text-lg text-charcoal block">{dateHeading}</strong>
+                <small className="text-muted-text text-[10px] block mt-0.5">
                   {isOff
                     ? schedule?.shop_closed
                       ? `${t("calendar.closureBannerTitle")}${schedule.reason ? ` · ${schedule.reason}` : ""}`
                       : `${t("team.notScheduled")}${schedule?.reason ? ` · ${schedule.reason}` : ""}`
                     : schedule
-                      ? `${schedule.open_time.slice(0, 5)} – ${schedule.close_time.slice(0, 5)}${schedule.source === "staff_exception" && schedule.reason ? ` · ${schedule.reason}` : ""
-                      }`
+                      ? `${schedule.open_time.slice(0, 5)} – ${schedule.close_time.slice(0, 5)}${
+                          schedule.source === "staff_exception" && schedule.reason ? ` · ${schedule.reason}` : ""
+                        }`
                       : "09:00 – 21:00"}
                 </small>
               </div>
-              <button onClick={handleNextDay} aria-label="Next day">
+              <button
+                type="button"
+                className="w-8 h-8 flex items-center justify-center border border-stone bg-ivory hover:bg-stone/20 text-charcoal rounded-sm text-sm cursor-pointer transition-colors"
+                onClick={handleNextDay}
+                aria-label="Next day"
+              >
                 ›
               </button>
             </div>
 
             {errorMessage && (
               <div
-                className="login-error-alert"
+                className="my-3 p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2"
                 role="alert"
-                style={{ margin: "16px 0", color: "var(--red, #cf3c3c)" }}
               >
                 <Icon name="bell" size={16} />
                 <span>{errorMessage}</span>
@@ -553,20 +566,22 @@ export function TeamSchedule({
             )}
 
             {isLoading ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+              <div className="py-12 px-4 text-center text-muted-text text-xs">
                 {t("team.loadingAgenda")}
               </div>
             ) : isOff && activeAppts.length === 0 ? (
-              <div className="staff-off-state">
-                <span className="avatar portrait">{initials}</span>
-                <h3>
+              <div className="min-h-[300px] flex flex-col items-center justify-center text-center p-6">
+                <div className="w-16 h-16 rounded-full bg-charcoal text-ivory-light flex items-center justify-center font-serif text-2xl font-bold mb-3">
+                  {initials}
+                </div>
+                <h3 className="font-serif text-2xl text-charcoal mb-1">
                   {schedule?.shop_closed
                     ? t("calendar.closureBannerTitle")
                     : schedule?.source === "staff_exception"
                       ? t("availability.badgeLeave")
                       : t("team.dayOff")}
                 </h3>
-                <p>
+                <p className="text-muted-text text-xs max-w-xs">
                   {schedule?.reason
                     ? `${schedule.reason} — ${t("team.dayOffDesc", { name: staff.name })}`
                     : t("team.dayOffDesc", { name: staff.name })}
@@ -577,14 +592,7 @@ export function TeamSchedule({
                 {isOff && activeAppts.length > 0 && (
                   <div
                     role="alert"
-                    style={{
-                      marginBottom: "14px",
-                      padding: "10px 12px",
-                      border: "1px solid var(--red, #cf3c3c)",
-                      background: "rgba(207, 60, 60, 0.08)",
-                      color: "var(--red, #cf3c3c)",
-                      fontSize: "11px",
-                    }}
+                    className="mb-3.5 p-3 border border-danger-line bg-danger-soft text-danger text-xs rounded-sm"
                   >
                     <strong>{t("calendar.bookingConflictBadge")}</strong>:{" "}
                     {schedule?.shop_closed
@@ -593,27 +601,32 @@ export function TeamSchedule({
                   </div>
                 )}
 
-                <div className="staff-workload">
-                  <span>
-                    <small>{t("team.bookingsHeader")}</small>
-                    <strong>{activeAppts.length}</strong>
-                  </span>
-                  <span>
-                    <small>{t("team.clientTimeHeader")}</small>
-                    <strong>{clientTimeFormatted}</strong>
-                  </span>
-                  <span>
-                    <small>{t("team.commissionHeader")}</small>
-                    <strong>
+                <div className="grid grid-cols-3 bg-charcoal text-ivory-light mb-5 rounded-sm divide-x divide-charcoal-muted">
+                  <div className="p-3">
+                    <small className="block text-[10px] uppercase tracking-wider text-stone-muted">
+                      {t("team.bookingsHeader")}
+                    </small>
+                    <strong className="block font-serif text-xl mt-1 text-ivory-light">{activeAppts.length}</strong>
+                  </div>
+                  <div className="p-3">
+                    <small className="block text-[10px] uppercase tracking-wider text-stone-muted">
+                      {t("team.clientTimeHeader")}
+                    </small>
+                    <strong className="block font-serif text-xl mt-1 text-ivory-light">{clientTimeFormatted}</strong>
+                  </div>
+                  <div className="p-3">
+                    <small className="block text-[10px] uppercase tracking-wider text-stone-muted">
+                      {t("team.commissionHeader")}
+                    </small>
+                    <strong className="block font-serif text-xl mt-1 text-ivory-light">
                       {staff.commission_bps != null ? `${staff.commission_bps / 100}%` : t("team.standardRate")}
                     </strong>
-                  </span>
+                  </div>
                 </div>
 
-                <div className="staff-agenda">
-                  <div className="agenda-line" />
+                <div className="relative pb-3">
                   {activeAppts.length === 0 ? (
-                    <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+                    <div className="py-9 px-4 text-center text-muted-text text-xs">
                       {t("team.noAppointmentsForStaff", { name: staff.name })}
                     </div>
                   ) : (
@@ -624,14 +637,14 @@ export function TeamSchedule({
                       const isCompleted = item.status === "completed"
 
                       return (
-                        <article className="agenda-item" key={item.id}>
-                          <div className="agenda-time">
-                            <strong>{startTime}</strong>
-                            <span>{endTime}</span>
+                        <article className="grid grid-cols-[54px_1fr] gap-2 mb-2.5" key={item.id}>
+                          <div className="pt-2 text-xs">
+                            <strong className="block text-charcoal">{startTime}</strong>
+                            <span className="block text-muted-text text-[10px]">{endTime}</span>
                           </div>
-                          <div className={`agenda-block ${isCheckedIn ? "service-dot" : ""}`}>
-                            <div>
-                              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                          <div className={`p-3 bg-ivory-light border border-stone border-l-4 rounded-sm ${isCheckedIn ? "border-l-forest" : "border-l-copper"}`}>
+                            <div className="flex justify-between items-center text-xs mb-1">
+                              <div className="flex gap-1.5 items-center">
                                 <Badge
                                   tone={
                                     isCompleted
@@ -651,10 +664,12 @@ export function TeamSchedule({
                                   <Badge tone="danger">{t("calendar.bookingConflictBadge")}</Badge>
                                 )}
                               </div>
-                              <span>{item.duration_snapshot_min || 30} {t("common.minutes")}</span>
+                              <span className="text-muted-text text-[10px]">
+                                {item.duration_snapshot_min || 30} {t("common.minutes")}
+                              </span>
                             </div>
-                            <h3>{item.customer_name}</h3>
-                            <p>{item.service_name}</p>
+                            <h3 className="font-serif text-base text-charcoal mt-1 mb-0.5">{item.customer_name}</h3>
+                            <p className="text-muted-text text-xs">{item.service_name}</p>
                           </div>
                         </article>
                       )
@@ -668,35 +683,27 @@ export function TeamSchedule({
 
         {/* === TAB 2: WEEKLY SCHEDULE === */}
         {activeTab === "weekly" && (
-          <div style={{ paddingTop: "16px" }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: "15px" }}>{t("availability.weeklyTitle")}</h3>
-            <p style={{ margin: "0 0 16px", fontSize: "11px", color: "var(--muted)" }}>
+          <div className="pt-4">
+            <h3 className="font-serif text-lg text-charcoal mb-1">{t("availability.weeklyTitle")}</h3>
+            <p className="text-xs text-muted-text mb-4">
               {t("availability.weeklySubtitle", { name: staff.name })}
             </p>
 
             {weeklyError && (
               <div
-                className="login-error-alert"
+                className="mb-3.5 p-3 border border-danger-line bg-danger-soft text-danger text-xs rounded-sm"
                 role="alert"
-                style={{
-                  marginBottom: "14px",
-                  padding: "10px 12px",
-                  border: "1px solid var(--red, #cf3c3c)",
-                  background: "rgba(207, 60, 60, 0.08)",
-                  color: "var(--red, #cf3c3c)",
-                  fontSize: "11px",
-                }}
               >
                 {weeklyError}
               </div>
             )}
 
             {isLoadingWeekly ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+              <div className="py-8 text-center text-muted-text text-xs">
                 {t("common.loading")}
               </div>
             ) : (
-              <div className="hours-list">
+              <div className="space-y-2.5">
                 {WEEKDAYS.map((wd) => {
                   const h = weeklyMap[wd.day] || {
                     staff_id: staff.id,
@@ -708,17 +715,21 @@ export function TeamSchedule({
                   const dayLabel = language === "id" ? wd.labelId : wd.labelEn
 
                   return (
-                    <div key={wd.day}>
-                      <label className="switch">
+                    <div
+                      key={wd.day}
+                      className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-2 p-2.5 bg-ivory-light border border-stone rounded-sm text-xs"
+                    >
+                      <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
+                          className="sr-only peer"
                           checked={h.is_working}
                           disabled={!canManageSchedule}
                           onChange={(e) => handleToggleWorkDay(wd.day, e.target.checked)}
                         />
-                        <i />
+                        <div className="w-9 h-5 bg-stone-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-muted after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-copper"></div>
                       </label>
-                      <strong>{dayLabel}</strong>
+                      <strong className="text-charcoal font-semibold">{dayLabel}</strong>
                       {h.is_working ? (
                         <>
                           <input
@@ -726,17 +737,19 @@ export function TeamSchedule({
                             disabled={!canManageSchedule}
                             value={formatTimeInput(h.open_time, "09:00")}
                             onChange={(e) => handleWeeklyTimeChange(wd.day, "open_time", e.target.value)}
+                            className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                           />
-                          <span className="hours-sep">{language === "id" ? "sampai" : "to"}</span>
+                          <span className="text-muted-text text-[10px]">{language === "id" ? "sampai" : "to"}</span>
                           <input
                             type="time"
                             disabled={!canManageSchedule}
                             value={formatTimeInput(h.close_time, "21:00")}
                             onChange={(e) => handleWeeklyTimeChange(wd.day, "close_time", e.target.value)}
+                            className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                           />
                         </>
                       ) : (
-                        <em style={{ gridColumn: "3 / -1", color: "var(--red, #cf3c3c)" }}>
+                        <em className="col-span-3 text-right text-danger not-italic font-medium">
                           {t("availability.dayOff")}
                         </em>
                       )}
@@ -749,21 +762,15 @@ export function TeamSchedule({
             {weeklyConflicts && (
               <div
                 role="alert"
-                style={{
-                  marginTop: "14px",
-                  padding: "12px 14px",
-                  border: "1px solid var(--red, #cf3c3c)",
-                  background: "rgba(207, 60, 60, 0.08)",
-                  fontSize: "11px",
-                }}
+                className="mt-3.5 p-3 border border-danger-line bg-danger-soft text-xs rounded-sm"
               >
-                <strong style={{ color: "var(--red, #cf3c3c)", display: "block", marginBottom: "4px" }}>
+                <strong className="text-danger block mb-1">
                   {t("closures.conflictWarningTitle")}
                 </strong>
-                <p style={{ margin: "0 0 8px", color: "var(--muted)" }}>
+                <p className="text-muted-text mb-2">
                   {t("closures.conflictWarningDesc")}
                 </p>
-                <ul style={{ margin: "0 0 10px", paddingLeft: "18px" }}>
+                <ul className="mb-3 pl-4 list-disc space-y-1 text-charcoal">
                   {(weeklyConflicts.affected_appointments || []).map((a) => (
                     <li key={`appt-${a.id}`}>
                       <strong>{a.customer_name}</strong> — {a.service_name} (
@@ -782,95 +789,82 @@ export function TeamSchedule({
                     </li>
                   ))}
                 </ul>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
+                <div className="flex gap-2">
+                  <Button
                     type="button"
-                    className="primary-button"
-                    style={{ background: "var(--red, #cf3c3c)", borderColor: "var(--red, #cf3c3c)" }}
+                    variant="danger"
+                    size="sm"
                     disabled={isSavingWeekly}
                     onClick={() => handleSaveWeeklyHours(true)}
                   >
                     {t("closures.confirmAndSave")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="filter-button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => setWeeklyConflicts(null)}
                   >
                     {t("common.cancel")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
 
             {canManageSchedule && !weeklyConflicts && (
-              <button
+              <Button
                 type="button"
-                className="primary-button"
-                style={{ marginTop: "16px", width: "100%", justifyContent: "center" }}
+                variant="primary"
+                className="mt-4 w-full"
                 disabled={isSavingWeekly || !isWeeklyDirty}
+                isLoading={isSavingWeekly}
                 onClick={() => handleSaveWeeklyHours(false)}
               >
                 {isSavingWeekly ? t("common.saving") : t("availability.saveWeekly")}
-              </button>
+              </Button>
             )}
           </div>
         )}
 
         {/* === TAB 3: LEAVE & EXCEPTIONS === */}
         {activeTab === "exceptions" && (
-          <div style={{ paddingTop: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "14px" }}>
+          <div className="pt-4">
+            <div className="flex justify-between items-start gap-2 mb-3.5">
               <div>
-                <h3 style={{ margin: "0 0 4px", fontSize: "15px" }}>{t("availability.exceptionsTitle")}</h3>
-                <p style={{ margin: 0, fontSize: "11px", color: "var(--muted)" }}>
+                <h3 className="font-serif text-lg text-charcoal mb-1">{t("availability.exceptionsTitle")}</h3>
+                <p className="text-xs text-muted-text">
                   {t("availability.exceptionsSubtitle", { name: staff.name })}
                 </p>
               </div>
               {canManageSchedule && !isExceptionFormOpen && (
-                <button
+                <Button
                   type="button"
-                  className="filter-button"
-                  style={{ fontWeight: 600, flexShrink: 0 }}
+                  variant="outline"
+                  size="sm"
                   onClick={openCreateException}
                 >
                   {t("availability.addException")}
-                </button>
+                </Button>
               )}
             </div>
 
             {exceptionError && (
               <div
-                className="login-error-alert"
+                className="mb-3.5 p-3 border border-danger-line bg-danger-soft text-danger text-xs rounded-sm"
                 role="alert"
-                style={{
-                  marginBottom: "14px",
-                  padding: "10px 12px",
-                  border: "1px solid var(--red, #cf3c3c)",
-                  background: "rgba(207, 60, 60, 0.08)",
-                  color: "var(--red, #cf3c3c)",
-                  fontSize: "11px",
-                }}
               >
                 {exceptionError}
               </div>
             )}
 
             {isExceptionFormOpen && canManageSchedule && (
-              <div
-                style={{
-                  padding: "14px",
-                  background: "var(--white)",
-                  border: "1px solid var(--line)",
-                  marginBottom: "16px",
-                }}
-              >
-                <strong style={{ display: "block", fontSize: "12px", marginBottom: "10px" }}>
+              <div className="p-3.5 bg-ivory-light border border-stone rounded-sm mb-4 space-y-3">
+                <strong className="block text-xs font-semibold text-charcoal">
                   {editingException ? t("availability.editException") : t("availability.addException")}
                 </strong>
 
-                <div className="form-grid">
-                  <label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <label className="flex flex-col gap-1 font-semibold text-charcoal">
                     {t("closures.startDate")} *
                     <input
                       type="date"
@@ -881,9 +875,10 @@ export function TeamSchedule({
                         if (excEndDate < v) setExcEndDate(v)
                         setExcConflicts(null)
                       }}
+                      className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                     />
                   </label>
-                  <label>
+                  <label className="flex flex-col gap-1 font-semibold text-charcoal">
                     {t("closures.endDate")} *
                     <input
                       type="date"
@@ -893,10 +888,11 @@ export function TeamSchedule({
                         setExcEndDate(e.target.value)
                         setExcConflicts(null)
                       }}
+                      className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                     />
                   </label>
 
-                  <label className="full">
+                  <label className="sm:col-span-2 flex flex-col gap-1 font-semibold text-charcoal">
                     {t("closures.modeLabel")}
                     <select
                       value={excIsWorking ? "adjusted" : "leave"}
@@ -904,6 +900,7 @@ export function TeamSchedule({
                         setExcIsWorking(e.target.value === "adjusted")
                         setExcConflicts(null)
                       }}
+                      className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                     >
                       <option value="leave">{t("availability.leaveFullDay")}</option>
                       <option value="adjusted">{t("availability.adjustedWorkingHours")}</option>
@@ -912,7 +909,7 @@ export function TeamSchedule({
 
                   {excIsWorking && (
                     <>
-                      <label>
+                      <label className="flex flex-col gap-1 font-semibold text-charcoal">
                         {t("closures.openTime")} *
                         <input
                           type="time"
@@ -921,9 +918,10 @@ export function TeamSchedule({
                             setExcOpenTime(e.target.value)
                             setExcConflicts(null)
                           }}
+                          className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                         />
                       </label>
-                      <label>
+                      <label className="flex flex-col gap-1 font-semibold text-charcoal">
                         {t("closures.closeTime")} *
                         <input
                           type="time"
@@ -932,18 +930,20 @@ export function TeamSchedule({
                             setExcCloseTime(e.target.value)
                             setExcConflicts(null)
                           }}
+                          className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                         />
                       </label>
                     </>
                   )}
 
-                  <label className="full">
+                  <label className="sm:col-span-2 flex flex-col gap-1 font-semibold text-charcoal">
                     {t("closures.reasonLabel")}
                     <input
                       type="text"
                       value={excReason}
                       placeholder={t("availability.reasonPlaceholder")}
                       onChange={(e) => setExcReason(e.target.value)}
+                      className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
                     />
                   </label>
                 </div>
@@ -951,21 +951,15 @@ export function TeamSchedule({
                 {excConflicts && (
                   <div
                     role="alert"
-                    style={{
-                      marginTop: "12px",
-                      padding: "12px",
-                      border: "1px solid var(--red, #cf3c3c)",
-                      background: "rgba(207, 60, 60, 0.08)",
-                      fontSize: "11px",
-                    }}
+                    className="mt-3 p-3 border border-danger-line bg-danger-soft text-xs rounded-sm"
                   >
-                    <strong style={{ color: "var(--red, #cf3c3c)", display: "block", marginBottom: "4px" }}>
+                    <strong className="text-danger block mb-1">
                       {t("closures.conflictWarningTitle")}
                     </strong>
-                    <p style={{ margin: "0 0 8px", color: "var(--muted)" }}>
+                    <p className="text-muted-text mb-2">
                       {t("closures.conflictWarningDesc")}
                     </p>
-                    <ul style={{ margin: "0 0 10px", paddingLeft: "18px" }}>
+                    <ul className="mb-3 pl-4 list-disc space-y-1 text-charcoal">
                       {(excConflicts.affected_appointments || []).map((a) => (
                         <li key={`appt-${a.id}`}>
                           <strong>{a.customer_name}</strong> — {a.service_name} (
@@ -984,40 +978,44 @@ export function TeamSchedule({
                         </li>
                       ))}
                     </ul>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
+                    <div className="flex gap-2">
+                      <Button
                         type="button"
-                        className="primary-button"
-                        style={{ background: "var(--red, #cf3c3c)", borderColor: "var(--red, #cf3c3c)" }}
+                        variant="danger"
+                        size="sm"
                         disabled={isSavingException}
                         onClick={() => handleSaveException(true)}
                       >
                         {t("closures.confirmAndSave")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="filter-button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => setExcConflicts(null)}
                       >
                         {t("common.cancel")}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
 
                 {!excConflicts && (
-                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                    <button
+                  <div className="flex gap-2 mt-3">
+                    <Button
                       type="button"
-                      className="primary-button"
+                      variant="primary"
+                      size="sm"
                       disabled={isSavingException}
+                      isLoading={isSavingException}
                       onClick={() => handleSaveException(false)}
                     >
                       {isSavingException ? t("common.saving") : t("common.save")}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="filter-button"
+                      variant="outline"
+                      size="sm"
                       disabled={isSavingException}
                       onClick={() => {
                         setIsExceptionFormOpen(false)
@@ -1026,30 +1024,22 @@ export function TeamSchedule({
                       }}
                     >
                       {t("common.cancel")}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
             )}
 
             {isLoadingExceptions ? (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "var(--muted)", fontSize: "11px" }}>
+              <div className="py-6 text-center text-muted-text text-xs">
                 {t("common.loading")}
               </div>
             ) : exceptions.length === 0 ? (
-              <div
-                style={{
-                  padding: "24px 14px",
-                  border: "1px dashed var(--line)",
-                  textAlign: "center",
-                  color: "var(--muted)",
-                  fontSize: "11px",
-                }}
-              >
+              <div className="p-6 border border-dashed border-stone text-center text-muted-text text-xs rounded-sm">
                 {t("availability.noExceptions", { name: staff.name })}
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div className="space-y-2">
                 {exceptions.map((exc) => {
                   const dateRangeLabel =
                     exc.start_date === exc.end_date
@@ -1058,26 +1048,17 @@ export function TeamSchedule({
                   return (
                     <div
                       key={exc.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "10px",
-                        padding: "10px 12px",
-                        background: "var(--white)",
-                        border: "1px solid var(--line)",
-                        borderLeft: exc.is_working
-                          ? "3px solid var(--amber, #b7791f)"
-                          : "3px solid var(--red, #cf3c3c)",
-                      }}
+                      className={`flex items-center justify-between gap-2 p-2.5 bg-ivory-light border border-stone border-l-4 rounded-sm ${
+                        exc.is_working ? "border-l-amber" : "border-l-danger"
+                      }`}
                     >
                       <div>
-                        <strong style={{ display: "block", fontSize: "12px" }}>
+                        <strong className="block text-xs font-semibold text-charcoal">
                           {exc.reason || (exc.is_working ? t("availability.adjustedWorkingHours") : t("availability.leaveFullDay"))}
                         </strong>
-                        <small style={{ color: "var(--muted)", fontSize: "10px" }}>{dateRangeLabel}</small>
+                        <small className="text-muted-text text-[10px]">{dateRangeLabel}</small>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge tone={exc.is_working ? "warning" : "danger"}>
                           {exc.is_working
                             ? t("availability.badgeAdjusted", {
@@ -1088,22 +1069,24 @@ export function TeamSchedule({
                         </Badge>
                         {canManageSchedule && (
                           <>
-                            <button
+                            <Button
                               type="button"
-                              className="filter-button"
-                              style={{ fontSize: "10px", padding: "4px 8px" }}
+                              variant="outline"
+                              size="sm"
+                              className="text-[10px] px-2 py-0.5"
                               onClick={() => openEditException(exc)}
                             >
                               {t("common.edit")}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="filter-button"
-                              style={{ fontSize: "10px", padding: "4px 8px", color: "var(--red, #cf3c3c)" }}
+                              variant="outline"
+                              size="sm"
+                              className="text-[10px] px-2 py-0.5 text-danger hover:border-danger"
                               onClick={() => handleDeleteException(exc.id)}
                             >
                               {t("common.delete")}
-                            </button>
+                            </Button>
                           </>
                         )}
                       </div>
@@ -1115,10 +1098,10 @@ export function TeamSchedule({
           </div>
         )}
 
-        <div className="schedule-drawer-actions">
-          <button className="filter-button" onClick={onClose}>
+        <div className="sticky bottom-[-24px] flex justify-end gap-2 bg-ivory-light border-t border-stone py-3.5 mt-auto">
+          <Button variant="outline" size="sm" onClick={onClose}>
             {t("common.close")}
-          </button>
+          </Button>
         </div>
       </aside>
     </div>

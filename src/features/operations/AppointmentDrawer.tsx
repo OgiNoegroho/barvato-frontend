@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import type { ApiAppointment, StaffItem } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
+import { Button } from "../../components/ui/Button"
 import {
   formatRupiah,
   formatTimeOnly,
@@ -109,257 +110,244 @@ export function AppointmentDrawer({
   }
 
   return (
-    <aside className="detail-drawer">
-      <div className="modal-head">
-        <div>
-          <span className="section-index">
-            {t("operations.appointmentDrawer").toUpperCase()}
-          </span>
-          <h2>{detail.customer_name}</h2>
-        </div>
-        <button
-          className="icon-button"
-          onClick={onClose}
-          aria-label={t("common.close")}
-        >
-          ×
-        </button>
-      </div>
-
-      <div className="detail-status">
-        <Badge tone={tone}>{statusLabel}</Badge>
-        {conflictReason && (
-          <Badge tone="danger">⚠️ {t("calendar.bookingConflictBadge")}</Badge>
-        )}
-        <span>
-          {language === "id" ? `Reservasi #${detail.id}` : `Booking #${detail.id}`}
-        </span>
-      </div>
-
-      <div className="detail-body">
-      {conflictReason && (isConfirmed || isCheckedIn) && (
-        <div
-          style={{
-            marginTop: "12px",
-            padding: "10px 12px",
-            borderRadius: "4px",
-            background: "rgba(207, 60, 60, 0.1)",
-            border: "1px solid rgba(207, 60, 60, 0.35)",
-            color: "var(--danger)",
-            fontSize: "12px",
-            lineHeight: 1.45,
-          }}
-        >
-          ⚠️{" "}
-          <strong>
-            {conflictReason === "shop_closed"
-              ? t("calendar.bookingConflictClosure")
-              : t("calendar.bookingConflictStaff")}
-          </strong>
-        </div>
-      )}
-
-      <dl>
-        <div>
-          <dt>{t("appointments.colServices")}</dt>
-          <dd>{detail.service_name}</dd>
-        </div>
-        <div>
-          <dt>{t("appointments.colTime")}</dt>
-          <dd>
-            {formatTimeOnly(detail.starts_at, timezone)} –{" "}
-            {formatTimeOnly(detail.ends_at, timezone)}
-          </dd>
-        </div>
-        <div>
-          <dt>{t("appointments.colBarber")}</dt>
-          <dd>{detail.staff_name}</dd>
-        </div>
-        <div>
-          <dt>{t("appointments.colPrice")}</dt>
-          <dd style={{ fontWeight: 700 }}>{formatRupiah(detail.price_snapshot)}</dd>
-        </div>
-        {detail.customer_phone && (
+    <>
+      <div
+        className="fixed inset-0 bg-charcoal/40 z-drawer backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className="detail-drawer fixed inset-y-0 right-0 z-drawer w-full max-w-[380px] h-full bg-ivory-light border-l border-stone p-5 sm:p-6 shadow-drawer flex flex-col overflow-hidden">
+        {/* Drawer Head */}
+        <div className="modal-head flex items-start justify-between gap-4 mb-3 shrink-0">
           <div>
-            <dt>{t("team.colContact")}</dt>
-            <dd>{detail.customer_phone}</dd>
+            <span className="section-index text-[10px] uppercase tracking-wider text-muted-text font-bold block mb-0.5">
+              {t("operations.appointmentDrawer").toUpperCase()}
+            </span>
+            <h2 className="font-serif text-2xl text-charcoal">{detail.customer_name}</h2>
           </div>
-        )}
-      </dl>
+          <button
+            className="icon-button text-muted-text hover:text-charcoal p-1 rounded-sm text-2xl leading-none cursor-pointer"
+            onClick={onClose}
+            aria-label={t("common.close")}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
 
-      {(isConfirmed || isCheckedIn) && onReschedule && (
-        <div style={{ marginTop: "16px" }}>
-          {!showReschedule ? (
-            <button
-              type="button"
-              className="filter-button"
-              style={{ width: "100%", justifyContent: "center" }}
-              onClick={() => setShowReschedule(true)}
+        {/* Status Bar */}
+        <div className="detail-status flex items-center justify-between pb-3 border-b border-stone text-xs text-muted-text shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge tone={tone}>{statusLabel}</Badge>
+            {conflictReason && (
+              <Badge tone="danger">⚠️ {t("calendar.bookingConflictBadge")}</Badge>
+            )}
+          </div>
+          <span className="text-[11px] font-mono">
+            {language === "id" ? `Reservasi #${detail.id}` : `Booking #${detail.id}`}
+          </span>
+        </div>
+
+        {/* Drawer Body */}
+        <div className="detail-body flex-1 overflow-y-auto min-h-0 py-3 space-y-4">
+          {conflictReason && (isConfirmed || isCheckedIn) && (
+            <div
+              role="alert"
+              className="p-3 bg-danger-soft border border-danger-line text-danger text-xs rounded-sm leading-relaxed"
             >
-              {t("calendar.rescheduleAppointment")}
-            </button>
-          ) : (
-            <form
-              onSubmit={handleSaveReschedule}
-              style={{
-                padding: "12px",
-                borderRadius: "4px",
-                background: "var(--paper-2)",
-                border: "1px solid var(--line)",
-              }}
-            >
-              <strong style={{ display: "block", fontSize: "12px", marginBottom: "10px" }}>
-                {t("calendar.rescheduleTitle")}
+              ⚠️{" "}
+              <strong>
+                {conflictReason === "shop_closed"
+                  ? t("calendar.bookingConflictClosure")
+                  : t("calendar.bookingConflictStaff")}
               </strong>
-              {rescheduleError && (
-                <div
-                  style={{
-                    color: "var(--danger)",
-                    fontSize: "11px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  ⚠️ {rescheduleError}
-                </div>
-              )}
-              <div style={{ display: "grid", gap: "8px" }}>
-                <label style={{ fontSize: "11px" }}>
-                  {t("calendar.rescheduleDate")}
-                  <input
-                    type="date"
-                    value={rescheduleDate}
-                    onChange={(e) => setRescheduleDate(e.target.value)}
-                    required
-                    style={{ width: "100%", marginTop: "4px" }}
-                  />
-                </label>
-                <label style={{ fontSize: "11px" }}>
-                  {t("calendar.rescheduleTime")}
-                  <input
-                    type="time"
-                    value={rescheduleTime}
-                    onChange={(e) => setRescheduleTime(e.target.value)}
-                    required
-                    style={{ width: "100%", marginTop: "4px" }}
-                  />
-                </label>
-                {staffList.length > 0 && (
-                  <label style={{ fontSize: "11px" }}>
-                    {t("calendar.rescheduleBarber")}
-                    <select
-                      value={rescheduleStaffId}
-                      onChange={(e) => setRescheduleStaffId(Number(e.target.value))}
-                      style={{ width: "100%", marginTop: "4px" }}
-                    >
-                      {staffList.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+            </div>
+          )}
+
+          <dl className="divide-y divide-stone border-y border-stone text-xs">
+            <div className="grid grid-cols-[100px_1fr] py-2.5">
+              <dt className="text-muted-text uppercase tracking-wider text-[10px]">{t("appointments.colServices")}</dt>
+              <dd className="font-medium text-charcoal">{detail.service_name}</dd>
+            </div>
+            <div className="grid grid-cols-[100px_1fr] py-2.5">
+              <dt className="text-muted-text uppercase tracking-wider text-[10px]">{t("appointments.colTime")}</dt>
+              <dd className="font-medium text-charcoal">
+                {formatTimeOnly(detail.starts_at, timezone)} – {formatTimeOnly(detail.ends_at, timezone)}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[100px_1fr] py-2.5">
+              <dt className="text-muted-text uppercase tracking-wider text-[10px]">{t("appointments.colBarber")}</dt>
+              <dd className="font-medium text-charcoal">{detail.staff_name}</dd>
+            </div>
+            <div className="grid grid-cols-[100px_1fr] py-2.5">
+              <dt className="text-muted-text uppercase tracking-wider text-[10px]">{t("appointments.colPrice")}</dt>
+              <dd className="font-bold font-mono text-charcoal">{formatRupiah(detail.price_snapshot)}</dd>
+            </div>
+            {detail.customer_phone && (
+              <div className="grid grid-cols-[100px_1fr] py-2.5">
+                <dt className="text-muted-text uppercase tracking-wider text-[10px]">{t("team.colContact")}</dt>
+                <dd className="font-medium text-charcoal">{detail.customer_phone}</dd>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  justifyContent: "flex-end",
-                  marginTop: "10px",
-                }}
-              >
-                <button
+            )}
+          </dl>
+
+          {/* Reschedule Section */}
+          {(isConfirmed || isCheckedIn) && onReschedule && (
+            <div className="pt-2">
+              {!showReschedule ? (
+                <Button
                   type="button"
-                  className="filter-button"
-                  onClick={() => setShowReschedule(false)}
-                  disabled={isSavingReschedule}
+                  variant="outline"
+                  className="w-full justify-center text-xs"
+                  onClick={() => setShowReschedule(true)}
                 >
-                  {t("common.cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={isSavingReschedule}
+                  {t("calendar.rescheduleAppointment")}
+                </Button>
+              ) : (
+                <form
+                  onSubmit={handleSaveReschedule}
+                  className="p-3 bg-ivory-light border border-stone rounded-sm space-y-2.5 text-xs shadow-xs"
                 >
-                  {isSavingReschedule
-                    ? t("common.saving")
-                    : t("calendar.saveReschedule")}
-                </button>
-              </div>
-            </form>
+                  <strong className="block text-xs font-semibold text-charcoal">
+                    {t("calendar.rescheduleTitle")}
+                  </strong>
+                  {rescheduleError && (
+                    <div className="text-danger text-[11px]">
+                      ⚠️ {rescheduleError}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label className="flex flex-col gap-1 text-[11px] font-medium text-charcoal">
+                      {t("calendar.rescheduleDate")}
+                      <input
+                        type="date"
+                        value={rescheduleDate}
+                        onChange={(e) => setRescheduleDate(e.target.value)}
+                        required
+                        className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-[11px] font-medium text-charcoal">
+                      {t("calendar.rescheduleTime")}
+                      <input
+                        type="time"
+                        value={rescheduleTime}
+                        onChange={(e) => setRescheduleTime(e.target.value)}
+                        required
+                        className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
+                      />
+                    </label>
+                    {staffList.length > 0 && (
+                      <label className="flex flex-col gap-1 text-[11px] font-medium text-charcoal">
+                        {t("calendar.rescheduleBarber")}
+                        <select
+                          value={rescheduleStaffId}
+                          onChange={(e) => setRescheduleStaffId(Number(e.target.value))}
+                          className="border border-stone bg-ivory px-2 py-1 text-xs rounded-sm text-charcoal focus:outline-none focus:border-copper"
+                        >
+                          {staffList.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  <div className="flex gap-2 justify-end pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowReschedule(false)}
+                      disabled={isSavingReschedule}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      isLoading={isSavingReschedule}
+                      disabled={isSavingReschedule}
+                    >
+                      {isSavingReschedule
+                        ? t("common.saving")
+                        : t("calendar.saveReschedule")}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
         </div>
-      )}
-      </div>
 
-      <div className="detail-footer">
-        {isConfirmed && (
-          <button
-            className="primary-button wide-detail"
-            onClick={() => onCheckIn(detail)}
-            style={{ width: "100%", marginBottom: "12px" }}
-          >
-            {language === "id" ? "Tandai Pelanggan Hadir" : "Check in Customer"}
-          </button>
-        )}
-
-        {isCheckedIn && (
-          <button
-            className="primary-button wide-detail"
-            onClick={() => onComplete(detail)}
-            style={{ width: "100%", marginBottom: "12px", background: "var(--forest)", borderColor: "var(--forest)" }}
-          >
-            {language === "id" ? "Selesaikan & Catat Pembayaran" : "Complete & Record Payment"}
-          </button>
-        )}
-
-        {isCompleted && (
-          <div style={{
-            padding: "12px",
-            background: "var(--paper-2)",
-            textAlign: "center",
-            fontSize: "12px",
-            borderRadius: "4px",
-            marginBottom: "12px",
-          }}>
-            {language === "id"
-              ? "✓ Janji temu ini telah selesai dan dibayar."
-              : "✓ This appointment has been completed and paid."}
-          </div>
-        )}
-
-        {(isConfirmed || isCheckedIn) && (
-          <div className="detail-links">
-            <button
-              onClick={() => {
-                const msg =
-                  language === "id"
-                    ? `Tandai janji temu #${detail.id} sebagai Tidak Hadir (No-Show)?`
-                    : `Mark appointment #${detail.id} as No-Show?`
-                if (confirm(msg)) {
-                  onNoShow(detail)
-                }
-              }}
+        {/* Drawer Footer */}
+        <div className="detail-footer mt-auto pt-3 border-t border-stone flex flex-col gap-2 shrink-0">
+          {isConfirmed && (
+            <Button
+              variant="primary"
+              className="w-full justify-center"
+              onClick={() => onCheckIn(detail)}
             >
-              {language === "id" ? "Tandai Tidak Hadir" : "Mark No-Show"}
-            </button>
-            <button
-              className="danger"
-              onClick={() => {
-                const msg =
-                  language === "id"
-                    ? `Batalkan janji temu untuk ${detail.customer_name}?`
-                    : `Cancel appointment for ${detail.customer_name}?`
-                if (confirm(msg)) {
-                  onCancel(detail)
-                }
-              }}
+              {language === "id" ? "Tandai Pelanggan Hadir" : "Check in Customer"}
+            </Button>
+          )}
+
+          {isCheckedIn && (
+            <Button
+              variant="primary"
+              className="w-full justify-center bg-forest hover:bg-forest/90 border-forest"
+              onClick={() => onComplete(detail)}
             >
-              {t("operations.cancelAppointment")}
-            </button>
-          </div>
-        )}
-      </div>
-    </aside>
+              {language === "id" ? "Selesaikan & Catat Pembayaran" : "Complete & Record Payment"}
+            </Button>
+          )}
+
+          {isCompleted && (
+            <div className="p-3 bg-ivory border border-stone text-center text-xs text-muted-text rounded-sm">
+              {language === "id"
+                ? "✓ Janji temu ini telah selesai dan dibayar."
+                : "✓ This appointment has been completed and paid."}
+            </div>
+          )}
+
+          {(isConfirmed || isCheckedIn) && (
+            <div className="detail-links flex justify-between items-center text-xs pt-1">
+              <button
+                type="button"
+                className="text-muted-text hover:text-charcoal underline text-[11px] cursor-pointer"
+                onClick={() => {
+                  const msg =
+                    language === "id"
+                      ? `Tandai janji temu #${detail.id} sebagai Tidak Hadir (No-Show)?`
+                      : `Mark appointment #${detail.id} as No-Show?`
+                  if (confirm(msg)) {
+                    onNoShow(detail)
+                  }
+                }}
+              >
+                {language === "id" ? "Tandai Tidak Hadir" : "Mark No-Show"}
+              </button>
+              <button
+                type="button"
+                className="text-danger hover:text-red-700 underline text-[11px] cursor-pointer"
+                onClick={() => {
+                  const msg =
+                    language === "id"
+                      ? `Batalkan janji temu untuk ${detail.customer_name}?`
+                      : `Cancel appointment for ${detail.customer_name}?`
+                  if (confirm(msg)) {
+                    onCancel(detail)
+                  }
+                }}
+              >
+                {t("operations.cancelAppointment")}
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   )
 }

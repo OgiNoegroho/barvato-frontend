@@ -1,8 +1,10 @@
 import React, { useState } from "react"
 import { formatRupiah } from "../lib/format"
 import { Icon } from "./ui/Icon"
+import { Button } from "./ui/Button"
 import { useI18n } from "../lib/i18n"
 import { useToast } from "../hooks/useToast"
+import { cn } from "../lib/utils"
 
 interface CheckoutModalProps {
   item: {
@@ -53,23 +55,26 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-modal bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" onMouseDown={onClose}>
       <div
-        className="modal"
+        className="modal bg-ivory-light border border-stone shadow-modal rounded-lg w-full max-w-[460px] p-5 sm:p-6 text-charcoal"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="checkout-title"
       >
-        <div className="modal-head">
+        <div className="modal-head pb-3 mb-4 border-b border-stone flex items-center justify-between">
           <div>
-            <span className="section-index">
+            <span className="section-index text-[9px] font-bold tracking-widest text-copper uppercase block mb-1">
               {language === "id" ? "SELESAIKAN & BAYAR" : "COMPLETE & PAY"}
             </span>
-            <h2 id="checkout-title">{t("checkout.title")}</h2>
+            <h2 id="checkout-title" className="font-serif text-xl sm:text-2xl text-charcoal m-0">
+              {t("checkout.title")}
+            </h2>
           </div>
           <button
-            className="icon-button"
+            type="button"
+            className="icon-button p-1 text-muted-text hover:text-charcoal text-lg leading-none rounded hover:bg-stone/20 cursor-pointer bg-transparent border-0"
             onClick={onClose}
             aria-label={t("common.close")}
           >
@@ -78,77 +83,61 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
         </div>
 
         {errorMessage && (
-          <div className="login-error-alert" role="alert" style={{ marginBottom: "16px" }}>
+          <div className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal" role="alert">
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="checkout-summary-box" style={{
-            background: "var(--paper-2)",
-            border: "1px solid var(--line)",
-            padding: "16px",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("checkout.billTo")}:</span>
-              <strong style={{ fontSize: "13px" }}>{item.customerName}</strong>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="checkout-summary-box bg-ivory border border-stone p-4 rounded-sm space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-text">{t("checkout.billTo")}:</span>
+              <strong className="font-semibold text-charcoal">{item.customerName}</strong>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("appointments.colServices")}:</span>
-              <span>{item.serviceName}</span>
+            <div className="flex justify-between">
+              <span className="text-muted-text">{t("appointments.colServices")}:</span>
+              <span className="font-medium text-charcoal">{item.serviceName}</span>
             </div>
             {item.staffName && (
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "12px", color: "var(--muted)" }}>{t("appointments.colBarber")}:</span>
-                <span>{item.staffName}</span>
+              <div className="flex justify-between">
+                <span className="text-muted-text">{t("appointments.colBarber")}:</span>
+                <span className="font-medium text-charcoal">{item.staffName}</span>
               </div>
             )}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              borderTop: "1px dashed var(--line)",
-              paddingTop: "10px",
-              marginTop: "8px",
-            }}>
-              <span style={{ fontSize: "12px", fontWeight: 600 }}>
+            <div className="flex justify-between border-t border-dashed border-stone pt-2.5 mt-2">
+              <span className="font-semibold text-charcoal">
                 {language === "id" ? "Tarif Layanan:" : "Service Price:"}
               </span>
-              <strong style={{ fontSize: "14px", color: "var(--ink)" }}>{formatRupiah(item.price)}</strong>
+              <strong className="font-serif text-sm text-charcoal">{formatRupiah(item.price)}</strong>
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "10px", fontWeight: 700, marginBottom: "8px" }}>
+          <div>
+            <label className="text-2xs font-bold uppercase tracking-wider text-charcoal block mb-1.5">
               {t("payment.method")}
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                className={`filter-button ${method === "cash" ? "active" : ""}`}
-                style={{
-                  height: "44px",
-                  fontWeight: 600,
-                  borderColor: method === "cash" ? "var(--copper)" : "var(--line)",
-                  background: method === "cash" ? "var(--paper-2)" : "var(--white)",
-                  color: method === "cash" ? "var(--copper)" : "var(--ink)",
-                }}
+                className={cn(
+                  "h-11 px-3 border rounded-sm font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center",
+                  method === "cash"
+                    ? "border-copper bg-copper-soft text-copper font-bold"
+                    : "border-stone bg-ivory-light text-charcoal hover:border-stone-muted"
+                )}
                 onClick={() => setMethod("cash")}
               >
                 {t("payment.cash")}
               </button>
               <button
                 type="button"
-                className={`filter-button ${method === "transfer" ? "active" : ""}`}
-                style={{
-                  height: "44px",
-                  fontWeight: 600,
-                  borderColor: method === "transfer" ? "var(--copper)" : "var(--line)",
-                  background: method === "transfer" ? "var(--paper-2)" : "var(--white)",
-                  color: method === "transfer" ? "var(--copper)" : "var(--ink)",
-                }}
+                className={cn(
+                  "h-11 px-3 border rounded-sm font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center",
+                  method === "transfer"
+                    ? "border-copper bg-copper-soft text-copper font-bold"
+                    : "border-stone bg-ivory-light text-charcoal hover:border-stone-muted"
+                )}
                 onClick={() => setMethod("transfer")}
               >
                 {language === "id" ? "Transfer Bank / QRIS" : "Transfer / QRIS"}
@@ -156,8 +145,8 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "10px", fontWeight: 700, marginBottom: "6px" }}>
+          <div>
+            <label className="text-2xs font-bold uppercase tracking-wider text-charcoal block mb-1.5">
               {language === "id" ? "Uang Tip Kapster (Opsional)" : "Barber Tip (Optional)"}
             </label>
             <input
@@ -168,58 +157,42 @@ export function CheckoutModal({ item, onClose, onConfirm }: CheckoutModalProps) 
                 const numeric = e.target.value.replace(/\D/g, "")
                 setTipInput(numeric || "0")
               }}
-              style={{
-                width: "100%",
-                height: "40px",
-                background: "var(--white)",
-                border: "1px solid var(--line)",
-                padding: "0 12px",
-                fontSize: "13px",
-              }}
+              className="w-full h-10 px-3 bg-ivory border border-stone rounded-sm text-sm text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none"
             />
           </div>
 
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "14px 16px",
-            background: "var(--ink)",
-            color: "var(--white)",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}>
+          <div className="flex justify-between items-center p-3.5 sm:p-4 bg-charcoal text-white rounded-sm my-4">
             <div>
-              <span style={{ fontSize: "10px", letterSpacing: "0.08em", opacity: 0.8 }}>
+              <span className="text-2xs uppercase tracking-wider text-white/70 block">
                 {language === "id" ? "TOTAL DITERIMA" : "TOTAL COLLECTED"}
               </span>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--copper-soft)" }}>
+              <div className="font-serif text-lg sm:text-xl font-bold text-copper-soft mt-0.5">
                 {formatRupiah(totalAmount)}
               </div>
             </div>
-            <span style={{ fontSize: "11px", opacity: 0.7 }}>
+            <span className="text-xs text-white/70 capitalize font-medium">
               {method === "cash" ? t("payment.cash") : t("payment.transfer")}
             </span>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" className="filter-button" onClick={onClose} disabled={isSubmitting}>
+          <div className="modal-actions flex items-center justify-end gap-2.5 pt-4 mt-5 border-t border-stone">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
               {t("common.cancel")}
-            </button>
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <span className="btn-spinner" />
-                  <span>{t("common.saving")}</span>
-                </>
-              ) : (
-                <span>
-                  {language === "id"
-                    ? "Selesaikan & Catat Pembayaran"
-                    : "Complete & Record Payment"}
-                </span>
-              )}
-            </button>
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isSubmitting}
+            >
+              {language === "id"
+                ? "Selesaikan & Catat Pembayaran"
+                : "Complete & Record Payment"}
+            </Button>
           </div>
         </form>
       </div>

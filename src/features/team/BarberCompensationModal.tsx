@@ -6,7 +6,9 @@ import {
   ApiError,
 } from "../../lib/api"
 import { Badge } from "../../components/ui/Badge"
+import { Button } from "../../components/ui/Button"
 import { Icon } from "../../components/ui/Icon"
+import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "../../components/ui/Modal"
 import { formatRupiah } from "../../lib/format"
 import { useI18n } from "../../lib/i18n"
 
@@ -169,32 +171,29 @@ export function BarberCompensationModal({
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div
-        className="modal"
-        onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="comp-modal-title"
-        style={{ maxWidth: "580px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
-      >
-        <div className="modal-head">
-          <div>
-            <span className="section-index">
-              {language === "id" ? "KOMPENSASI & PENGGAJIAN STAF" : "STAFF COMPENSATION & PAYROLL"}
-            </span>
-            <h2 id="comp-modal-title">{staff.name}</h2>
-          </div>
-          <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>
-            ×
-          </button>
+    <Modal isOpen onClose={onClose} size="md">
+      <ModalHeader>
+        <div>
+          <span className="text-[10px] uppercase tracking-wider text-charcoal-muted font-bold block mb-1">
+            {language === "id" ? "KOMPENSASI & PENGGAJIAN STAF" : "STAFF COMPENSATION & PAYROLL"}
+          </span>
+          <ModalTitle id="comp-modal-title">{staff.name}</ModalTitle>
         </div>
+        <button
+          type="button"
+          className="text-charcoal-muted hover:text-charcoal-ink p-1 rounded-sm text-lg leading-none"
+          onClick={onClose}
+          aria-label={t("common.close")}
+        >
+          ×
+        </button>
+      </ModalHeader>
 
+      <ModalBody>
         {errorMessage && (
           <div
-            className="login-error-alert"
+            className="p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2 mb-3"
             role="alert"
-            style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
           >
             <Icon name="bell" size={16} />
             <span>{errorMessage}</span>
@@ -202,23 +201,15 @@ export function BarberCompensationModal({
         )}
 
         {isLoading ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+          <div className="py-10 text-center text-charcoal-muted text-xs">
             {language === "id" ? "Memuat profil kompensasi..." : "Loading compensation profile..."}
           </div>
         ) : (
-          <div>
+          <div className="space-y-4">
             {/* Active Policy Summary Card */}
-            <div
-              style={{
-                background: "var(--paper)",
-                border: "1px solid var(--line)",
-                padding: "16px",
-                marginBottom: "20px",
-                borderRadius: "2px",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>
+            <div className="bg-ivory-paper border border-stone-line p-4 rounded-sm">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] font-bold tracking-wider text-charcoal-muted">
                   {language === "id" ? "KEBIJAKAN AKTIF SAAT INI" : "CURRENT ACTIVE POLICY"}
                 </span>
                 {activePolicy && formatModelBadge(activePolicy.model)}
@@ -226,10 +217,10 @@ export function BarberCompensationModal({
 
               {activePolicy ? (
                 <div>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: "4px" }}>
+                  <div className="text-sm font-semibold text-charcoal-ink mb-1">
                     {formatPolicyDetails(activePolicy)}
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>
+                  <div className="text-xs text-charcoal-muted">
                     {language === "id" ? "Berlaku sejak " : "Effective since "}
                     <strong>{activePolicy.effective_from ? activePolicy.effective_from.split("T")[0] : (language === "id" ? "awal" : "start")}</strong>
                     {activePolicy.effective_to && (
@@ -238,7 +229,7 @@ export function BarberCompensationModal({
                   </div>
                 </div>
               ) : (
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                <div className="text-xs text-charcoal-muted">
                   {language === "id"
                     ? `Belum ada kebijakan kompensasi yang ditentukan. Menggunakan persentase komisi standar (${staff.commission_bps ? `${staff.commission_bps / 100}%` : "50%"}).`
                     : `No active compensation policy assigned. Falling back to legacy commission rate (${staff.commission_bps ? `${staff.commission_bps / 100}%` : "50%"}).`}
@@ -247,37 +238,28 @@ export function BarberCompensationModal({
             </div>
 
             {/* New / Update Policy Form */}
-            <form onSubmit={handleSubmit}>
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "var(--muted)",
-                  marginBottom: "12px",
-                }}
-              >
+            <form id="comp-form" onSubmit={handleSubmit} className="space-y-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-charcoal-muted">
                 {language === "id" ? "Tetapkan Kebijakan Baru (Berlaku Tanggal)" : "Set New Policy (Effective-Dated)"}
               </div>
 
               {formError && (
                 <div
-                  className="login-error-alert"
+                  className="p-3 bg-red-50/80 border border-red-200 text-danger text-xs rounded-sm flex items-center gap-2"
                   role="alert"
-                  style={{ marginBottom: "16px", color: "var(--red, #cf3c3c)" }}
                 >
                   <Icon name="bell" size={16} />
                   <span>{formError}</span>
                 </div>
               )}
 
-              <div className="form-grid">
-                <label className="full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <label className="sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                   {language === "id" ? "Model Kompensasi" : "Compensation Model"}
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value as "commission" | "salary" | "hybrid")}
+                    className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                   >
                     <option value="commission">
                       {language === "id" ? "Komisi per Layanan Selesai" : "Commission per Completed Service"}
@@ -293,11 +275,12 @@ export function BarberCompensationModal({
 
                 {(model === "commission" || model === "hybrid") && (
                   <>
-                    <label>
+                    <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                       {language === "id" ? "Struktur Perhitungan Komisi" : "Commission Structure"}
                       <select
                         value={commissionType}
                         onChange={(e) => setCommissionType(e.target.value as "percentage" | "fixed")}
+                        className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                       >
                         <option value="percentage">
                           {language === "id" ? "Persentase Tarif Layanan (%)" : "Percentage of Service Revenue (%)"}
@@ -309,7 +292,7 @@ export function BarberCompensationModal({
                     </label>
 
                     {commissionType === "percentage" ? (
-                      <label>
+                      <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                         {language === "id" ? "Persentase Komisi (%)" : "Commission Rate (%)"}
                         <input
                           type="number"
@@ -319,13 +302,14 @@ export function BarberCompensationModal({
                           value={commissionPct}
                           onChange={(e) => setCommissionPct(parseFloat(e.target.value) || 0)}
                           required
+                          className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                         />
-                        <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
+                        <small className="text-charcoal-muted text-[10px]">
                           Basis points: {Math.round(commissionPct * 100)} bps
                         </small>
                       </label>
                     ) : (
-                      <label>
+                      <label className="flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                         {language === "id" ? "Nominal Tetap per Layanan (Rp)" : "Fixed Amount per Job (Rp)"}
                         <input
                           type="number"
@@ -334,8 +318,9 @@ export function BarberCompensationModal({
                           value={fixedCommissionAmount}
                           onChange={(e) => setFixedCommissionAmount(parseInt(e.target.value, 10) || 0)}
                           required
+                          className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                         />
-                        <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
+                        <small className="text-charcoal-muted text-[10px]">
                           {language === "id" ? "Format" : "Formatted"}: {formatRupiah(fixedCommissionAmount)}
                         </small>
                       </label>
@@ -344,7 +329,7 @@ export function BarberCompensationModal({
                 )}
 
                 {(model === "salary" || model === "hybrid") && (
-                  <label className={model === "salary" ? "full" : ""}>
+                  <label className={`flex flex-col gap-1 text-xs font-semibold text-charcoal-ink ${model === "salary" ? "sm:col-span-2" : ""}`}>
                     {language === "id" ? "Gaji Pokok Bulanan (Rp)" : "Monthly Base Salary (Rp)"}
                     <input
                       type="number"
@@ -353,8 +338,9 @@ export function BarberCompensationModal({
                       value={monthlySalary}
                       onChange={(e) => setMonthlySalary(parseInt(e.target.value, 10) || 0)}
                       required
+                      className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                     />
-                    <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
+                    <small className="text-charcoal-muted text-[10px]">
                       {language === "id"
                         ? `Prorata untuk bulan berjalan: ${formatRupiah(monthlySalary)} / bulan`
                         : `Prorated for partial months: ${formatRupiah(monthlySalary)} / month`}
@@ -362,75 +348,51 @@ export function BarberCompensationModal({
                   </label>
                 )}
 
-                <label className="full">
+                <label className="sm:col-span-2 flex flex-col gap-1 text-xs font-semibold text-charcoal-ink">
                   {language === "id" ? "Tanggal Berlaku (YYYY-MM-DD)" : "Effective Date (YYYY-MM-DD)"}
                   <input
                     type="date"
                     value={effectiveFrom}
                     onChange={(e) => setEffectiveFrom(e.target.value)}
                     required
+                    className="border border-stone-line bg-white px-3 py-2 text-xs text-charcoal-ink rounded-sm focus:outline-none focus:border-copper"
                   />
-                  <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "4px", display: "block" }}>
+                  <small className="text-charcoal-muted text-[10px]">
                     {language === "id"
                       ? "Pendapatan sebelum tanggal ini akan tetap menggunakan tarif historis sebelumnya."
                       : "Past earnings before this date will preserve their historical rates."}
                   </small>
                 </label>
               </div>
-
-              <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="filter-button"
-                  style={{ fontSize: "11px", padding: "4px 8px" }}
-                  onClick={() => setShowHistory(!showHistory)}
-                >
-                  {showHistory
-                    ? (language === "id" ? "Sembunyikan Riwayat Kebijakan" : "Hide Policy History")
-                    : (language === "id" ? `Lihat Riwayat Kebijakan (${history.length})` : `View Policy History (${history.length})`)}
-                </button>
-
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    type="button"
-                    className="filter-button"
-                    onClick={onClose}
-                    disabled={isSubmitting}
-                  >
-                    {t("common.close")}
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting
-                      ? (language === "id" ? "Menerapkan..." : "Applying...")
-                      : (language === "id" ? "Terapkan Kebijakan Baru" : "Apply New Policy")}
-                  </button>
-                </div>
-              </div>
             </form>
+
+            {/* Toggle History Button */}
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHistory(!showHistory)}
+              >
+                {showHistory
+                  ? (language === "id" ? "Sembunyikan Riwayat Kebijakan" : "Hide Policy History")
+                  : (language === "id" ? `Lihat Riwayat Kebijakan (${history.length})` : `View Policy History (${history.length})`)}
+              </Button>
+            </div>
 
             {/* Policy History Log */}
             {showHistory && (
-              <div
-                style={{
-                  marginTop: "20px",
-                  borderTop: "1px solid var(--line)",
-                  paddingTop: "14px",
-                }}
-              >
-                <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
+              <div className="mt-4 pt-3 border-t border-stone-line space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-charcoal-muted">
                   {language === "id" ? "RIWAYAT KEBIJAKAN KOMPENSASI" : "COMPENSATION POLICY HISTORY"}
                 </div>
 
                 {history.length === 0 ? (
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>
+                  <div className="text-xs text-charcoal-muted py-2">
                     {language === "id" ? "Belum ada riwayat perubahan kebijakan." : "No recorded policy transitions."}
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div className="space-y-2">
                     {history.map((h) => {
                       const fromStr = h.effective_from ? h.effective_from.split("T")[0] : ""
                       const toStr = h.effective_to ? h.effective_to.split("T")[0] : (language === "id" ? "Sekarang" : "Present")
@@ -439,20 +401,19 @@ export function BarberCompensationModal({
                       return (
                         <div
                           key={h.id}
-                          style={{
-                            background: isCurrent ? "var(--white)" : "var(--paper)",
-                            border: `1px solid ${isCurrent ? "var(--ink)" : "var(--line)"}`,
-                            padding: "10px",
-                            fontSize: "11px",
-                          }}
+                          className={`p-2.5 rounded-sm text-xs border ${
+                            isCurrent
+                              ? "bg-white border-charcoal-ink shadow-xs"
+                              : "bg-ivory-paper border-stone-line"
+                          }`}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                            <strong>{formatModelBadge(h.model)}</strong>
-                            <span style={{ color: "var(--muted)" }}>
+                          <div className="flex justify-between items-center mb-1">
+                            {formatModelBadge(h.model)}
+                            <span className="text-charcoal-muted text-[10px]">
                               {fromStr} → {toStr}
                             </span>
                           </div>
-                          <div style={{ color: "var(--ink)" }}>{formatPolicyDetails(h)}</div>
+                          <div className="text-charcoal-ink">{formatPolicyDetails(h)}</div>
                         </div>
                       )
                     })}
@@ -462,7 +423,29 @@ export function BarberCompensationModal({
             )}
           </div>
         )}
-      </div>
-    </div>
+      </ModalBody>
+
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          disabled={isSubmitting}
+        >
+          {t("common.close")}
+        </Button>
+        <Button
+          type="submit"
+          form="comp-form"
+          variant="primary"
+          isLoading={isSubmitting}
+          disabled={isSubmitting || isLoading}
+        >
+          {isSubmitting
+            ? (language === "id" ? "Menerapkan..." : "Applying...")
+            : (language === "id" ? "Terapkan Kebijakan Baru" : "Apply New Policy")}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
