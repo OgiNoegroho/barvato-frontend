@@ -22,9 +22,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
 
   const [name, setName] = useState(staff?.name ?? "")
   const [contact, setContact] = useState(staff?.contact ?? "")
-  const [commissionPct, setCommissionPct] = useState<number>(
-    staff?.commission_bps ? staff.commission_bps / 100 : 50
-  )
   const [active, setActive] = useState<boolean>(staff?.active ?? true)
 
   // Account creation fields (for new staff)
@@ -46,13 +43,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
       setErrorMessage("Staff member name is required.")
       return
     }
-
-    if (!isEditing && (commissionPct < 0 || commissionPct > 100)) {
-      setErrorMessage("Commission rate must be between 0% and 100%.")
-      return
-    }
-
-    const commissionBps = Math.round(commissionPct * 100)
 
     if (!isEditing && createUser) {
       const trimmedEmail = email.trim()
@@ -78,7 +68,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
       } else {
         const res = await staffApi.create({
           name: trimmedName,
-          commission_bps: commissionBps,
           contact: contact.trim() || (phone.trim() || email.trim()) || undefined,
           role: createUser ? role : "barber",
           create_user: createUser,
@@ -227,38 +216,13 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
             required
           />
 
-          {!isEditing ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label={language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
-                placeholder="081299990002"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                disabled={isSubmitting}
-              />
-
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                label={`${t("team.commissionRate")} (%)`}
-                helperText={`Basis points: ${Math.round(commissionPct * 100)} bps`}
-                value={commissionPct}
-                onChange={(e) => setCommissionPct(parseFloat(e.target.value) || 0)}
-                disabled={isSubmitting}
-                required
-              />
-            </div>
-          ) : (
-            <Input
-              label={language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
-              placeholder="081299990002"
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              disabled={isSubmitting}
-            />
-          )}
+          <Input
+            label={language === "id" ? "Kontak (Telepon/Email)" : "Contact (Phone or Email)"}
+            placeholder="081299990002"
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            disabled={isSubmitting}
+          />
 
           {isEditing && (
             <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">

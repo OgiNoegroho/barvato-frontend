@@ -407,7 +407,7 @@ export interface StaffItem {
 
 export interface CreateStaffRequest {
   name: string
-  commission_bps: number
+  commission_bps?: number
   contact?: string
   role?: "barber" | "manager"
   create_user?: boolean
@@ -833,7 +833,7 @@ export interface PaymentRecord {
   method: "cash" | "transfer"
   amount: number
   tip: number
-  commission_bps: number
+  commission_bps?: number
   commission_amount: number
   refunded_at?: string | null
   paid_at: string
