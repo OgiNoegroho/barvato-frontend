@@ -48,7 +48,7 @@ export interface AuthUser {
 export interface CurrentShop {
   id: number
   name: string
-  role: "owner" | "manager" | "barber"
+  role: "owner"
   staff_id?: number
   status: string
   timezone?: string
@@ -57,7 +57,7 @@ export interface CurrentShop {
 export interface ShopMembership {
   shop_id: number
   shop_name: string
-  role: "owner" | "manager" | "barber"
+  role: "owner"
   staff_id?: number
   status: string
   active?: boolean
@@ -409,7 +409,6 @@ export interface CreateStaffRequest {
   name: string
   commission_bps?: number
   contact?: string
-  role?: "barber" | "manager"
   create_user?: boolean
   email?: string
   phone?: string

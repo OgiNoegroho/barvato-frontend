@@ -44,7 +44,6 @@ export const enTranslations: Record<TranslationKey, string> = {
 
   // Roles
   "roles.owner": "Owner",
-  "roles.manager": "Manager",
   "roles.barber": "Barber",
   "roles.staff": "Staff",
 

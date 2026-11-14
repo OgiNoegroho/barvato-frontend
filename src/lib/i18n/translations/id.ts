@@ -44,7 +44,6 @@ export const idTranslations: Record<TranslationKey, string> = {
 
   // Roles
   "roles.owner": "Pemilik",
-  "roles.manager": "Manajer",
   "roles.barber": "Kapster",
   "roles.staff": "Staf",
 

@@ -106,7 +106,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
 
   const { currentShop, updateCurrentShop } = useAuth()
   const canManageSettings = currentShop?.role === "owner"
-  const canManageSchedule = currentShop?.role === "owner" || currentShop?.role === "manager"
+  const canManageSchedule = currentShop?.role === "owner"
 
   // --- Shop Profile State ---
   const [shopDetails, setShopDetails] = useState<ShopDetails | null>(null)

@@ -251,7 +251,7 @@ export function FinancePeople({ type }: FinancePeopleProps) {
     if (!confirm(t("finance.confirmVoid"))) return
 
     try {
-      await payrollApi.voidPayout(payoutId, "Voided by shop manager")
+      await payrollApi.voidPayout(payoutId, "Voided by shop owner")
       toast.success(t("finance.voidSuccess"))
       loadData()
     } catch (err: unknown) {

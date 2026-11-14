@@ -61,7 +61,7 @@ export function TeamSchedule({
   const { t, language } = useI18n()
   const toast = useToast()
   const { currentShop } = useAuth()
-  const canManageSchedule = currentShop?.role === "owner" || currentShop?.role === "manager"
+  const canManageSchedule = currentShop?.role === "owner"
 
   const [activeTab, setActiveTab] = useState<"agenda" | "weekly" | "exceptions">(initialTab)
 
@@ -470,11 +470,7 @@ export function TeamSchedule({
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-wider text-muted-text font-bold block mb-0.5">
-              {staff.role === "manager"
-                ? t("roles.manager")
-                : staff.role === "owner"
-                ? t("roles.owner")
-                : t("roles.barber")}
+              {staff.role === "owner" ? t("roles.owner") : t("roles.barber")}
             </span>
             <h2 className="font-serif text-2xl text-charcoal">{staff.name}</h2>
           </div>

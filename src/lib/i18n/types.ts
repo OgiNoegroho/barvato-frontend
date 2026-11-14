@@ -44,7 +44,6 @@ export type TranslationKey =
 
   // Roles
   | "roles.owner"
-  | "roles.manager"
   | "roles.barber"
   | "roles.staff"
 

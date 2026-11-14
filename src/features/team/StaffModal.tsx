@@ -26,7 +26,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
 
   // Account creation fields (for new staff)
   const [createUser, setCreateUser] = useState(false)
-  const [role, setRole] = useState<"barber" | "manager">("barber")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
 
@@ -69,7 +68,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
         const res = await staffApi.create({
           name: trimmedName,
           contact: contact.trim() || (phone.trim() || email.trim()) || undefined,
-          role: createUser ? role : "barber",
           create_user: createUser,
           email: createUser && email.trim() ? email.trim() : undefined,
           phone: createUser && phone.trim() ? phone.trim() : undefined,
@@ -144,7 +142,7 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
               </div>
               <div className="flex">
                 <span className="text-muted-text w-28 shrink-0">{t("team.assignedRole")}</span>
-                <span className="capitalize font-semibold text-charcoal">{t(`roles.${role}` as any)}</span>
+                <span className="capitalize font-semibold text-charcoal">{t("roles.barber")}</span>
               </div>
             </div>
 
@@ -260,21 +258,6 @@ export function StaffModal({ staff, onClose, onSuccess }: StaffModalProps) {
 
               {createUser && (
                 <div className="space-y-3 bg-ivory p-3.5 border border-stone rounded-sm">
-                  <div>
-                    <label className="text-2xs font-bold uppercase tracking-wider text-charcoal block mb-1">
-                      {t("team.modalRole")}
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as "barber" | "manager")}
-                      className="h-10 w-full appearance-none rounded-sm border border-stone bg-ivory-light px-3 text-sm text-charcoal focus:border-copper focus:ring-1 focus:ring-copper outline-none"
-                      disabled={isSubmitting}
-                    >
-                      <option value="barber">{t("roles.barber")}</option>
-                      <option value="manager">{t("roles.manager")}</option>
-                    </select>
-                  </div>
-
                   <Input
                     type="email"
                     label={t("team.modalEmail")}
