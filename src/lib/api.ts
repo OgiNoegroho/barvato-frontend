@@ -43,6 +43,17 @@ export interface AuthUser {
   phone: string
   platform_admin?: boolean
   must_change_password: boolean
+  email_verified_at?: string | null
+  email_verification_grace_until?: string | null
+}
+
+export interface VerifyEmailResponse {
+  verified: boolean
+}
+
+export interface ResendVerificationResponse {
+  sent: boolean
+  deduplicated: boolean
 }
 
 export interface CurrentShop {
@@ -218,6 +229,20 @@ export const authApi = {
     return apiFetch<{ success: boolean }>("/api/auth/change-password", {
       method: "POST",
       body: { current_password: currentPassword, new_password: newPassword },
+    })
+  },
+
+  verifyEmail(token: string): Promise<VerifyEmailResponse> {
+    return apiFetch<VerifyEmailResponse>("/api/auth/verify-email", {
+      method: "POST",
+      body: { token },
+    })
+  },
+
+  resendVerification(): Promise<ResendVerificationResponse> {
+    return apiFetch<ResendVerificationResponse>("/api/auth/resend-verification", {
+      method: "POST",
+      body: {},
     })
   },
 

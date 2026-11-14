@@ -7,6 +7,7 @@ import {
   type ShopMembership,
   type LoginRequest,
   type LoginResponse,
+  type ResendVerificationResponse,
 } from "../../lib/api"
 
 interface AuthContextValue {
@@ -15,11 +16,14 @@ interface AuthContextValue {
   memberships: ShopMembership[]
   isLoading: boolean
   isAuthenticated: boolean
+  isEmailVerified: boolean
   needsShopSelection: boolean
   initError: string | null
   login: (credentials: LoginRequest) => Promise<LoginResponse>
   selectShop: (shopId: number) => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
+  resendVerification: () => Promise<ResendVerificationResponse>
+  refreshSession: () => Promise<void>
   logout: () => Promise<void>
   retrySession: () => void
   updateCurrentShop: (updates: Partial<CurrentShop>) => void
@@ -127,7 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
   }, [currentShop])
 
+  const resendVerification = useCallback(async (): Promise<ResendVerificationResponse> => {
+    return authApi.resendVerification()
+  }, [])
+
   const isAuthenticated = user !== null && currentShop !== null
+  const isEmailVerified = Boolean(user?.email_verified_at)
   const needsShopSelection = user !== null && currentShop === null && memberships.length > 0
 
   return (
@@ -138,11 +147,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         memberships,
         isLoading,
         isAuthenticated,
+        isEmailVerified,
         needsShopSelection,
         initError,
         login,
         selectShop,
         changePassword,
+        resendVerification,
+        refreshSession: checkSession,
         logout,
         retrySession: checkSession,
         updateCurrentShop,

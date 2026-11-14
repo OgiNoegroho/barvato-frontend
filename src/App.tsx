@@ -17,6 +17,8 @@ import { SettingsPage } from "./features/settings/SettingsPage"
 import { AuthProvider, useAuth } from "./features/auth/AuthContext"
 import { LoginPage } from "./features/auth/LoginPage"
 import { ChangePasswordModal } from "./features/auth/ChangePasswordModal"
+import { VerifyEmailPage } from "./features/auth/VerifyEmailPage"
+import { EmailVerificationBanner } from "./features/auth/EmailVerificationBanner"
 import { I18nProvider, useI18n, type TranslationKey } from "./lib/i18n"
 
 function AppShell() {
@@ -144,6 +146,8 @@ function AppShell() {
           }}
         />
 
+        <EmailVerificationBanner />
+
         <section className="content flex-1 w-full max-w-[1540px] mx-auto p-4 sm:p-6 lg:p-8 xl:px-9 pb-24 md:pb-12">
           <div className="page-heading">
             <div>
@@ -220,11 +224,26 @@ function AppShell() {
 }
 
 export function App() {
+  const [isVerifyEmailRoute, setIsVerifyEmailRoute] = useState<boolean>(
+    () => typeof window !== "undefined" && window.location.pathname === "/verify-email"
+  )
+
+  const handleLeaveVerifyEmail = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/")
+    }
+    setIsVerifyEmailRoute(false)
+  }, [])
+
   return (
     <I18nProvider>
       <ToastProvider>
         <AuthProvider>
-          <AppShell />
+          {isVerifyEmailRoute ? (
+            <VerifyEmailPage onContinue={handleLeaveVerifyEmail} />
+          ) : (
+            <AppShell />
+          )}
           <Toast />
         </AuthProvider>
       </ToastProvider>
