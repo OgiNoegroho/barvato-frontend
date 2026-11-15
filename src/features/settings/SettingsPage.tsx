@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Icon } from "../../components/ui/Icon"
 import { SettingsContent } from "./SettingsContent"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
+import { mapOAuthErrorMessage, type OAuthSettingsNotice } from "../../lib/routing"
 
 const SETTINGS_SECTIONS = [
   { id: "Shop profile", key: "settings.sectionProfile" },
@@ -12,14 +13,59 @@ const SETTINGS_SECTIONS = [
   { id: "Payroll & Compensation", key: "settings.sectionPayroll" },
   { id: "Notifications", key: "settings.sectionNotifications" },
   { id: "Billing", key: "settings.sectionBilling" },
+  { id: "Account & Security", key: "settings.sectionAccountSecurity" },
 ]
 
-export function SettingsPage() {
-  const [section, setSection] = useState(SETTINGS_SECTIONS[0].id)
-  const { t } = useI18n()
+export interface SettingsPageProps {
+  oauthNotice?: OAuthSettingsNotice | null
+  onDismissOAuthNotice?: () => void
+}
+
+export function SettingsPage({ oauthNotice = null, onDismissOAuthNotice }: SettingsPageProps = {}) {
+  const [section, setSection] = useState(
+    oauthNotice ? "Account & Security" : SETTINGS_SECTIONS[0].id
+  )
+  const { t, language } = useI18n()
+
+  useEffect(() => {
+    if (oauthNotice) {
+      setSection("Account & Security")
+    }
+  }, [oauthNotice])
+
+  const noticeText = oauthNotice
+    ? oauthNotice.kind === "success"
+      ? language === "id"
+        ? "Akun Google berhasil ditautkan ke akun Barvato Anda."
+        : "Google account linked to your Barvato account."
+      : mapOAuthErrorMessage(oauthNotice.code, language)
+    : null
 
   return (
-    <div className="settings-layout grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4.5 items-start">
+    <div className="space-y-4">
+      {oauthNotice && noticeText && (
+        <div
+          role="alert"
+          className={cn(
+            "px-4 py-3 rounded-sm border text-xs flex items-center justify-between gap-3",
+            oauthNotice.kind === "success"
+              ? "bg-ivory-light border-copper text-charcoal"
+              : "bg-danger-soft border-danger-line text-danger"
+          )}
+        >
+          <span>{noticeText}</span>
+          {onDismissOAuthNotice && (
+            <button
+              type="button"
+              onClick={onDismissOAuthNotice}
+              className="bg-transparent border-0 text-current cursor-pointer text-xs underline shrink-0"
+            >
+              {t("common.close")}
+            </button>
+          )}
+        </div>
+      )}
+      <div className="settings-layout grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4.5 items-start">
       <aside className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible border-t border-charcoal bg-ivory-light md:bg-transparent rounded-sm md:rounded-none">
         {SETTINGS_SECTIONS.map((x) => {
           const isActive = section === x.id
@@ -41,7 +87,8 @@ export function SettingsPage() {
           )
         })}
       </aside>
-      <SettingsContent section={section} />
+      <SettingsContent section={section} oauthNotice={oauthNotice} />
+      </div>
     </div>
   )
 }

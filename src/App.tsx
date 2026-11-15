@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import type { Page } from "./types"
 import { ToastProvider, useToast } from "./hooks/useToast"
 import { Icon } from "./components/ui/Icon"
@@ -16,22 +16,52 @@ import { MoneyPage } from "./features/money/MoneyPage"
 import { SettingsPage } from "./features/settings/SettingsPage"
 import { AuthProvider, useAuth } from "./features/auth/AuthContext"
 import { LoginPage } from "./features/auth/LoginPage"
+import { OnboardingPage } from "./features/auth/OnboardingPage"
 import { ChangePasswordModal } from "./features/auth/ChangePasswordModal"
 import { VerifyEmailPage } from "./features/auth/VerifyEmailPage"
 import { EmailVerificationBanner } from "./features/auth/EmailVerificationBanner"
 import { I18nProvider, useI18n, type TranslationKey } from "./lib/i18n"
+import {
+  parseRoute,
+  resolveCanonicalPath,
+  type OAuthSettingsNotice,
+  type ParsedRoute,
+} from "./lib/routing"
 
-function AppShell() {
+function getCurrentRoute(): ParsedRoute {
+  if (typeof window === "undefined") {
+    return parseRoute("/", "")
+  }
+  return parseRoute(window.location.pathname, window.location.search)
+}
+
+function AppShell({
+  route,
+  onRouteChange,
+}: {
+  route: ParsedRoute
+  onRouteChange: (next: ParsedRoute) => void
+}) {
   const {
     user,
     currentShop,
     isLoading,
     isAuthenticated,
+    needsShopSelection,
     initError,
     retrySession,
   } = useAuth()
   const { t } = useI18n()
-  const [page, setPage] = useState<Page>("Overview")
+  const [page, setPage] = useState<Page>(() =>
+    route.kind === "settings" ? "Settings" : "Overview"
+  )
+  const [oauthLoginError, setOauthLoginError] = useState<string | null>(route.loginError)
+  const [oauthSettingsNotice, setOauthSettingsNotice] = useState<OAuthSettingsNotice | null>(
+    route.settingsNotice
+  )
+  const [onboardingConflict, setOnboardingConflict] = useState<string | null>(
+    route.onboardingConflict
+  )
   const [navTarget, setNavTarget] = useState<{
     entityType: string
     entityId: number
@@ -43,6 +73,64 @@ function AppShell() {
     initialDate?: string
   } | null>(null)
   const { notify } = useToast()
+
+  // Capture transient OAuth query params on route updates and sync page with URL.
+  useEffect(() => {
+    if (route.loginError) setOauthLoginError(route.loginError)
+    if (route.settingsNotice) setOauthSettingsNotice(route.settingsNotice)
+    if (route.onboardingConflict) setOnboardingConflict(route.onboardingConflict)
+    if (route.kind === "settings") {
+      setPage("Settings")
+    } else if (route.kind === "root" || route.kind === "dashboard") {
+      setPage((prev) => (prev === "Settings" ? "Overview" : prev))
+    }
+  }, [route])
+
+  // Normalize URL path/query to prevent stale OAuth parameters and redirect loops.
+  useEffect(() => {
+    const canonicalPath = resolveCanonicalPath(route, {
+      isLoading,
+      isAuthenticated,
+      needsShopSelection,
+    })
+    if (!canonicalPath || typeof window === "undefined") return
+
+    const currentFull = window.location.pathname + window.location.search
+    if (currentFull !== canonicalPath) {
+      window.history.replaceState(null, "", canonicalPath)
+      onRouteChange(parseRoute(canonicalPath, ""))
+    }
+  }, [route, isLoading, isAuthenticated, needsShopSelection, onRouteChange])
+
+  const handleSelectPage = useCallback(
+    (nextPage: Page) => {
+      setPage(nextPage)
+      if (typeof window !== "undefined") {
+        const targetPath = nextPage === "Settings" ? "/settings" : "/"
+        if (window.location.pathname !== targetPath || window.location.search !== "") {
+          window.history.pushState(null, "", targetPath)
+          onRouteChange(parseRoute(targetPath, ""))
+        }
+      }
+    },
+    [onRouteChange]
+  )
+
+  const handleBackToLogin = useCallback(() => {
+    setOnboardingConflict(null)
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/login")
+      onRouteChange(parseRoute("/login", ""))
+    }
+  }, [onRouteChange])
+
+  const handleOnboardingCompleted = useCallback(() => {
+    setOnboardingConflict(null)
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/")
+      onRouteChange(parseRoute("/", ""))
+    }
+  }, [onRouteChange])
 
   if (isLoading) {
     return (
@@ -82,7 +170,22 @@ function AppShell() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />
+    if (route.kind === "onboarding" && !needsShopSelection) {
+      return (
+        <OnboardingPage
+          conflict={onboardingConflict}
+          onDismissConflict={() => setOnboardingConflict(null)}
+          onBackToLogin={handleBackToLogin}
+          onCompleted={handleOnboardingCompleted}
+        />
+      )
+    }
+    return (
+      <LoginPage
+        oauthErrorCode={oauthLoginError}
+        onClearOAuthError={() => setOauthLoginError(null)}
+      />
+    )
   }
 
   if (user?.must_change_password) {
@@ -113,12 +216,12 @@ function AppShell() {
 
   return (
     <div className="app-shell min-h-screen flex bg-ivory text-charcoal font-sans">
-      <Sidebar currentPage={page} onSelectPage={setPage} />
+      <Sidebar currentPage={page} onSelectPage={handleSelectPage} />
 
       <main className="flex-1 min-w-0 flex flex-col">
         <Topbar
           currentPage={page}
-          onNavigate={setPage}
+          onNavigate={handleSelectPage}
           onNavigateEntity={(entityType, entityId, data) => {
             if (entityType && entityId) {
               const targetDate =
@@ -199,11 +302,16 @@ function AppShell() {
           {page === "Appointments" && <AppointmentsPage />}
           {page === "Team" && <TeamPage />}
           {page === "Money" && <MoneyPage />}
-          {page === "Settings" && <SettingsPage />}
+          {page === "Settings" && (
+            <SettingsPage
+              oauthNotice={oauthSettingsNotice}
+              onDismissOAuthNotice={() => setOauthSettingsNotice(null)}
+            />
+          )}
         </section>
       </main>
 
-      <MobileNav currentPage={page} onSelectPage={setPage} />
+      <MobileNav currentPage={page} onSelectPage={handleSelectPage} />
 
       {modal && (
         <BookingModal
@@ -224,25 +332,32 @@ function AppShell() {
 }
 
 export function App() {
-  const [isVerifyEmailRoute, setIsVerifyEmailRoute] = useState<boolean>(
-    () => typeof window !== "undefined" && window.location.pathname === "/verify-email"
-  )
+  const [route, setRoute] = useState<ParsedRoute>(() => getCurrentRoute())
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const handlePopState = () => {
+      setRoute(getCurrentRoute())
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
 
   const handleLeaveVerifyEmail = useCallback(() => {
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", "/")
     }
-    setIsVerifyEmailRoute(false)
+    setRoute(parseRoute("/", ""))
   }, [])
 
   return (
     <I18nProvider>
       <ToastProvider>
         <AuthProvider>
-          {isVerifyEmailRoute ? (
+          {route.kind === "verify-email" ? (
             <VerifyEmailPage onContinue={handleLeaveVerifyEmail} />
           ) : (
-            <AppShell />
+            <AppShell route={route} onRouteChange={setRoute} />
           )}
           <Toast />
         </AuthProvider>

@@ -26,9 +26,12 @@ import { ServiceModal } from "./ServiceModal"
 import { StaffModal } from "../team/StaffModal"
 import { useAuth } from "../auth/AuthContext"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
+import type { OAuthSettingsNotice } from "../../lib/routing"
+import { AccountSecuritySection } from "./AccountSecuritySection"
 
 interface SettingsContentProps {
   section: string
+  oauthNotice?: OAuthSettingsNotice | null
 }
 
 const WEEKDAYS = [
@@ -52,7 +55,7 @@ function formatTimeForApi(val?: string | null, fallback = "09:00:00"): string {
   return val
 }
 
-export function SettingsContent({ section }: SettingsContentProps) {
+export function SettingsContent({ section, oauthNotice = null }: SettingsContentProps) {
   const { t, language, setLanguage } = useI18n()
 
   const headers: Record<string, [string, string]> = {
@@ -93,6 +96,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
       language === "id"
         ? "Kelola paket langganan, faktur, dan metode pembayaran."
         : "Manage your subscription, invoices, and payment method.",
+    ],
+    "Account & Security": [
+      t("settings.sectionAccountSecurity"),
+      t("security.subtitle"),
     ],
   }
 
@@ -1773,6 +1780,10 @@ export function SettingsContent({ section }: SettingsContentProps) {
       )}
 
       {/* --- Billing (Localized) --- */}
+      {section === "Account & Security" && (
+        <AccountSecuritySection oauthNotice={oauthNotice} />
+      )}
+
       {section === "Billing" && (
         <div className="billing-panel grid grid-cols-1 md:grid-cols-3 border border-stone-line divide-y md:divide-y-0 md:divide-x divide-stone-line bg-white rounded-sm mb-6">
           <div>
@@ -2027,6 +2038,7 @@ export function SettingsContent({ section }: SettingsContentProps) {
       )}
 
       {section !== "Billing" &&
+        section !== "Account & Security" &&
         section !== "Shop profile" &&
         section !== "Hours & availability" &&
         section !== "Services & pricing" &&

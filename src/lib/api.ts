@@ -104,6 +104,32 @@ export interface LogoutResponse {
   success: boolean
 }
 
+export interface OnboardingStatusResponse {
+  active: boolean
+  email?: string
+  name?: string
+  expires_at?: string
+}
+
+export interface OnboardingCompleteRequest {
+  shop_name: string
+  owner_name?: string
+  phone?: string
+  timezone?: string
+  cuts_hair?: boolean
+  commission_bps?: number
+  terms_accepted: boolean
+  privacy_accepted: boolean
+  terms_version?: string
+  privacy_version?: string
+}
+
+export interface OnboardingCompleteResponse {
+  user: AuthUser
+  shop: CurrentShop
+  requires_shop_selection: boolean
+}
+
 export interface HealthResponse {
   status: string
   db: string
@@ -203,6 +229,30 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await response.text()) as unknown as T
 }
 
+export interface GoogleMethodInfo {
+  linked: boolean
+  email: string
+  email_verified: boolean
+  linked_at: string
+  last_used_at?: string | null
+}
+
+export interface AuthMethodsResponse {
+  has_password: boolean
+  google: GoogleMethodInfo | null
+  reauthenticated: boolean
+  google_enabled: boolean
+}
+
+export interface ReauthenticateResponse {
+  reauthenticated_at: string
+  expires_in_seconds: number
+}
+
+export interface GoogleLinkStartResponse {
+  authorize_url: string
+}
+
 // Authentication API methods
 export const authApi = {
   login(credentials: LoginRequest): Promise<LoginResponse> {
@@ -249,6 +299,61 @@ export const authApi = {
   logout(): Promise<LogoutResponse> {
     return apiFetch<LogoutResponse>("/api/auth/logout", {
       method: "POST",
+      body: {},
+    })
+  },
+
+  onboardingStatus(): Promise<OnboardingStatusResponse> {
+    return apiFetch<OnboardingStatusResponse>("/api/auth/onboarding/status", {
+      method: "GET",
+    })
+  },
+
+  onboardingCancel(): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>("/api/auth/onboarding/cancel", {
+      method: "POST",
+      body: {},
+    })
+  },
+
+  onboardingComplete(payload: OnboardingCompleteRequest): Promise<OnboardingCompleteResponse> {
+    return apiFetch<OnboardingCompleteResponse>("/api/auth/onboarding/complete", {
+      method: "POST",
+      body: payload,
+    })
+  },
+
+  methods(): Promise<AuthMethodsResponse> {
+    return apiFetch<AuthMethodsResponse>("/api/auth/methods", {
+      method: "GET",
+    })
+  },
+
+  reauthenticate(password: string): Promise<ReauthenticateResponse> {
+    return apiFetch<ReauthenticateResponse>("/api/auth/reauthenticate", {
+      method: "POST",
+      body: { password },
+    })
+  },
+
+  googleLinkStart(): Promise<GoogleLinkStartResponse> {
+    return apiFetch<GoogleLinkStartResponse>("/api/auth/google/link/start", {
+      method: "POST",
+      body: {},
+    })
+  },
+
+  googleUnlink(): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>("/api/auth/google/unlink", {
+      method: "POST",
+      body: {},
+    })
+  },
+
+  setPassword(newPassword: string): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>("/api/auth/set-password", {
+      method: "POST",
+      body: { new_password: newPassword },
     })
   },
 

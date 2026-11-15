@@ -6,20 +6,49 @@ import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
 import { useI18n } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
+import { mapOAuthErrorMessage } from "../../lib/routing"
+import {
+  buildGoogleStartURL,
+  GoogleAuthButton,
+  isGoogleAuthClientEnabled,
+  type GoogleAuthIntent,
+} from "./GoogleAuthButton"
 
-export function LoginPage() {
+export interface LoginPageProps {
+  oauthErrorCode?: string | null
+  onClearOAuthError?: () => void
+}
+
+export function LoginPage({ oauthErrorCode = null, onClearOAuthError }: LoginPageProps = {}) {
   const { login, selectShop, needsShopSelection, memberships } = useAuth()
   const { t, language, setLanguage } = useI18n()
 
   const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [redirectingIntent, setRedirectingIntent] = useState<GoogleAuthIntent | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectingShopId, setSelectingShopId] = useState<number | null>(null)
+  const googleEnabled = isGoogleAuthClientEnabled()
+
+  const displayedError =
+    errorMessage ?? (oauthErrorCode ? mapOAuthErrorMessage(oauthErrorCode, language) : null)
+
+  const handleGoogleAuth = (intent: GoogleAuthIntent) => {
+    if (!googleEnabled || isSubmitting || redirectingIntent !== null) return
+    onClearOAuthError?.()
+    setErrorMessage(null)
+    setRedirectingIntent(intent)
+    if (typeof window !== "undefined") {
+      window.location.assign(buildGoogleStartURL(intent))
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isSubmitting) return
+    if (isSubmitting || redirectingIntent !== null) return
+
+    onClearOAuthError?.()
 
     const trimmedIdentifier = identifier.trim()
     if (!trimmedIdentifier || !password) {
@@ -157,10 +186,10 @@ export function LoginPage() {
               </p>
             </div>
 
-            {errorMessage && (
+            {displayedError && (
               <div className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal" role="alert">
                 <Icon name="bell" size={16} />
-                <span>{errorMessage}</span>
+                <span>{displayedError}</span>
               </div>
             )}
 
@@ -195,10 +224,10 @@ export function LoginPage() {
               <p className="text-xs text-muted-text leading-relaxed m-0">{t("auth.loginSubtitle")}</p>
             </div>
 
-            {errorMessage && (
+            {displayedError && (
               <div className="login-error-alert bg-danger-soft border border-danger-line text-danger px-3.5 py-2.5 rounded-sm text-xs flex items-center gap-2 mb-4 leading-normal" role="alert">
                 <Icon name="bell" size={16} />
-                <span>{errorMessage}</span>
+                <span>{displayedError}</span>
               </div>
             )}
 
@@ -233,11 +262,33 @@ export function LoginPage() {
               type="submit"
               variant="primary"
               size="lg"
+              disabled={redirectingIntent !== null}
               isLoading={isSubmitting}
               className="login-button w-full h-[42px] mt-2 text-xs tracking-wider"
             >
               {isSubmitting ? t("auth.signingIn") : t("auth.signInButton")}
             </Button>
+
+            {googleEnabled && (
+              <div className="mt-5">
+                <div className="relative flex items-center justify-center mb-4">
+                  <span className="w-full border-t border-stone" />
+                  <span className="px-3 bg-ivory-light text-[10px] uppercase tracking-widest text-muted-text shrink-0">
+                    {t("auth.orDivider")}
+                  </span>
+                  <span className="w-full border-t border-stone" />
+                </div>
+
+                <GoogleAuthButton
+                  intent="signin"
+                  label={t("auth.googleSignInButton")}
+                  loadingLabel={t("auth.googleRedirecting")}
+                  isLoading={redirectingIntent === "signin"}
+                  disabled={isSubmitting}
+                  onInitiate={handleGoogleAuth}
+                />
+              </div>
+            )}
           </form>
         )}
 
