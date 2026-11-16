@@ -474,6 +474,32 @@ export interface UpdateShopClosureRequest {
   confirm_conflicts?: boolean
 }
 
+export interface OwnerBarberStaff {
+  id: number
+  shop_id: number
+  name: string
+  active: boolean
+  commission_bps: number
+  contact?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface OwnerBarberConfig {
+  linked: boolean
+  enabled: boolean
+  staff_id: number | null
+  staff: OwnerBarberStaff | null
+}
+
+export interface UpdateOwnerBarberRequest {
+  enabled: boolean
+  link_staff_id?: number
+  name?: string
+  commission_bps?: number
+  contact?: string
+}
+
 export const shopApi = {
   get(): Promise<{ shop: ShopDetails }> {
     return apiFetch<{ shop: ShopDetails }>("/api/shop")
@@ -481,6 +507,15 @@ export const shopApi = {
   update(data: { name?: string; timezone?: string }): Promise<{ shop: ShopDetails }> {
     return apiFetch<{ shop: ShopDetails }>("/api/shop", {
       method: "PATCH",
+      body: data,
+    })
+  },
+  getOwnerBarber(): Promise<OwnerBarberConfig> {
+    return apiFetch<OwnerBarberConfig>("/api/shop/owner-barber")
+  },
+  updateOwnerBarber(data: UpdateOwnerBarberRequest): Promise<OwnerBarberConfig> {
+    return apiFetch<OwnerBarberConfig>("/api/shop/owner-barber", {
+      method: "PUT",
       body: data,
     })
   },

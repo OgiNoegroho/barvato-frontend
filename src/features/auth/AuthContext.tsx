@@ -125,7 +125,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMemberships((prev) =>
       prev.map((m) =>
         (updates.id && m.shop_id === updates.id) || (currentShop && m.shop_id === currentShop.id)
-          ? { ...m, ...(updates.name ? { shop_name: updates.name } : {}) }
+          ? {
+              ...m,
+              ...(updates.name ? { shop_name: updates.name } : {}),
+              ...("staff_id" in updates ? { staff_id: updates.staff_id } : {}),
+            }
           : m
       )
     )

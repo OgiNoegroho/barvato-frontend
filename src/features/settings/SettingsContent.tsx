@@ -28,6 +28,7 @@ import { useAuth } from "../auth/AuthContext"
 import { useI18n, type TranslationKey } from "../../lib/i18n"
 import type { OAuthSettingsNotice } from "../../lib/routing"
 import { AccountSecuritySection } from "./AccountSecuritySection"
+import { OwnerBarberSection } from "./OwnerBarberSection"
 
 interface SettingsContentProps {
   section: string
@@ -1363,7 +1364,10 @@ export function SettingsContent({ section, oauthNotice = null }: SettingsContent
 
       {/* --- Staff & Permissions (Integrated) --- */}
       {section === "Staff & permissions" && (
-        <div className="service-settings border-t border-charcoal divide-y divide-stone mb-6">
+        <div>
+          <OwnerBarberSection staffList={staffList} onUpdated={loadStaff} />
+
+          <div className="service-settings border-t border-charcoal divide-y divide-stone mb-6">
           {staffError && (
             <div
               className="login-error-alert mb-4 flex items-center justify-between p-3 border border-danger/30 bg-danger-soft text-danger text-xs rounded-sm"
@@ -1457,6 +1461,7 @@ export function SettingsContent({ section, oauthNotice = null }: SettingsContent
               }}
             />
           )}
+          </div>
         </div>
       )}
 
