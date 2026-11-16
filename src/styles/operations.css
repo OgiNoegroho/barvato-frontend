@@ -340,6 +340,7 @@
   gap: 12px;
   padding: 7px 12px;
   background: var(--paper);
+  overflow-x: auto;
 }
 .unassigned-strip > button {
   min-width: 235px;
@@ -372,8 +373,17 @@
 }
 .ops-grid {
   display: grid;
-  grid-template-columns: 62px repeat(3, minmax(180px, 1fr));
+  grid-template-columns: 62px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 1fr);
   overflow-x: auto;
+  overflow-y: hidden;
+}
+.ops-grid .time-column.ops-time {
+  position: sticky;
+  left: 0;
+  z-index: 12;
+  background: var(--white);
 }
 .ops-grid .barber-column:last-child {
   border-right: 0;
@@ -868,13 +878,10 @@
     overflow: visible;
   }
   .ops-calendar {
-    overflow-x: auto;
-  }
-  .ops-grid {
-    min-width: 720px;
+    min-width: 0;
   }
   .unassigned-strip {
-    min-width: 720px;
+    overflow-x: auto;
   }
   .integrated-queue {
     position: fixed;
